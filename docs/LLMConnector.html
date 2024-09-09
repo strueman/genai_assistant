@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLMConnector Documentation</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.25.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+    <style>
+        body {
+            display: flex;
+            background-color: #121212;
+            color: #e0e0e0;
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0; /* Remove default margin */
+            overflow-x: hidden; /* Prevent horizontal scrolling */
+        }
+        nav {
+            width: 200px;
+            padding: 20px;
+            background-color: #1e1e1e;
+            position: fixed;
+            height: 100%;
+            overflow-y: auto;
+        }
+        nav a {
+            color: #bb86fc;
+            text-decoration: none;
+            display: block;
+            margin-bottom: 10px;
+        }
+        nav a:hover, nav a.active {
+            text-decoration: underline;
+            color: #ffffff;
+        }
+        main {
+            margin-left: 240px; /* Adjusted margin to create space */
+            padding: 20px;
+            width: calc(100% - 260px); /* Ensure main content respects the menu bar width and padding */
+            box-sizing: border-box; /* Include padding in the width calculation */
+            flex: 1;
+        }
+        h1, h2, h3, h4 {
+            color: #bb86fc;
+            margin-top: 40px; /* Add vertical spacing */
+        }
+        #example-chat-arguments {
+            margin-top: 100px; /* Add extra spacing above this section */
+        }
+        #response-dictionary-example {
+            margin-top: 100px; /* Add extra spacing above this section */
+        }
+        #plugin-architecture {
+            margin-top: 100px; /* Add extra spacing above this section */
+        }
+        #adding-provider     {
+            margin-top: 100px; /* Add extra spacing above this section */
+        }
+        #using-provider {
+            margin-top: 100px; /* Add extra spacing above this section */
+        }
+        #tool-usage {
+            margin-top: 100px; /* Add extra spacing above this section */
+        }
+        #api-error-handling {
+            margin-top: 100px; /* Add extra spacing above this section */
+        }
+        code {
+            background-color: #1e1e1e;
+            color: #dcdcdc;
+            padding: 2px 4px;
+            border-radius: 4px;
+        }
+        pre {
+            background-color: #1e1e1e;
+            color: #dcdcdc;
+            padding: 10px 20px 10px 10px; /* Added right padding */
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        ul {
+            list-style-type: none;
+            padding-left: 0;
+        }
+        ul li {
+            margin-bottom: 10px;
+        }
+        ul li ul {
+            margin-top: 5px;
+            margin-left: 20px;
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <h2>Index</h2>
+        <a href="#chat-method">Chat Method</a>
+        <a href="#example-chat-arguments">Example Chat Arguments</a>
+        <a href="#response-dictionary-example">Standardized Response Dictionary</a>
+        <a href="#plugin-architecture">Plugin Architecture</a>
+        <a href="#adding-provider">Adding a New Provider</a>
+        <a href="#using-provider">Using the New Provider</a>
+        <a href="#tool-usage">Tool Usage and Creation</a>
+        <a href="#api-error-handling">API Error Handling</a>
+    </nav>
+    <main>
+        <h1>Usage Instructions for <code>LLMConnector</code></h1>
+
+        <h2 id="chat-method">Chat Method</h2>
+        <p>The <code>chat</code> method sends a prompt to the configured LLM model and returns the response in a unified format.</p>
+
+        <h3 id="initialization">Initialization</h3>
+        <p>You can initialize the <code>LLMConnector</code> class by optionally passing a provider name. If no provider is passed, it will default to the provider specified in the <code>settings.cfg</code> file.</p>
+
+        <h3>Arguments:</h3>
+        <ul>
+            <li><code>provider</code> (optional): <strong>Note: API key and endpoint must be set in the settings.cfg file</strong>
+                <ul>
+                    <li>The name of the provider to use (<code>"anthropic"</code> or <code>"openai"</code> or <code>"openrouter"</code>).</li>
+                    <li>Defaults to the provider specified in the <code>settings.cfg</code> file.</li>
+                </ul>
+            </li>
+            <li><code>system_prompt</code> (optional):
+                <ul>
+                    <li>The system prompt to set the context.</li>
+                    <li>Defaults to "You are a helpful assistant."</li>
+                </ul>
+            </li>
+            <li><code>model</code> (optional):
+                <ul>
+                    <li>The model to use.</li>
+                    <li>Defaults to the model configured for the provider.</li>
+                </ul>
+            </li>
+            <li><code>temperature</code> (optional):
+                <ul>
+                    <li>The sampling temperature.</li>
+                    <li>Defaults to 0.7.</li>
+                </ul>
+            </li>
+            <li><code>max_tokens</code> (optional):
+                <ul>
+                    <li>The maximum number of tokens to generate.</li>
+                    <li>Defaults to 150.</li>
+                </ul>
+            </li>
+        </ul>
+
+        <h3 id="example-chat-arguments">Example of the chat function with arguments</h3>
+        <pre><code class="language-python">from connector import LLMConnector as llm
+
+# Set the provider to openai overriding the default in settings.cfg
+msg = llm(provider='openai').chat # Initialize the chat function with the provider set to openai
+
+# using the model, temperature, and max_tokens parameters. You can use any, all or none of them
+response = msg("Tell me a joke.", system_prompt="You are a helpful assistant", model="gpt-4o", temperature=0.5, max_tokens=100)
+
+def chat_demo(response):
+    print("Text: ", response['text'])
+    print("Model: ", response['model'])
+    print("Total Usage: ", response['usage']['total_tokens'])
+    print("Input Tokens: ", response['usage']['input_tokens'])
+    print("Output Tokens: ", response['usage']['output_tokens'])
+    print("Provider: ", response['provider'])
+
+if __name__ == "__main__":
+    chat_demo(response)
+
+# Output from the above code
+'''
+Text: Sure, here's one for you:
+Why don't skeletons fight each other?
+They don't have the guts!
+Model: gpt-4o-2024-05-13
+Total Usage: 43
+Input Tokens: 22
+Output Tokens: 21
+Provider: openai
+'''
+</code></pre>
+
+        <h3 id="response-dictionary-example">Example of the response dictionary</h3>
+        <p>Standardized response dictionary returns the same keys for all providers.</p>
+        <pre><code class="language-python">from connector import LLMConnector as llm
+msg = llm().chat # Initialize the chat function
+response = msg("Tell me a joke.")
+# Returns a dictionary with the following keys:
+# dict_keys(['provider', 'model', 'text', 'usage', 'finish_reason', 'refusal', 'function_call', 'tool_calls', 'logprobs', 'stop_sequence', 'stop_reason'])
+# Demo of the response dictionary
+
+def chat_demo(response):
+    print("Text: ", response['text'])
+    print("Model: ", response['model'])
+    print("Total Usage: ", response['usage']['total_tokens'])
+    print("Input Tokens: ", response['usage']['input_tokens'])
+    print("Output Tokens: ", response['usage']['output_tokens'])
+    print("Provider: ", response['provider'])
+    print("Finish Reason: ", response['finish_reason'])
+    print("Stop Reason: ", response['stop_reason'])
+    print("Stop Sequence: ", response['stop_sequence'])
+    print("Function Call: ", response['function_call'])
+    print("Tool Calls: ", response['tool_calls'])
+
+if __name__ == "__main__":
+    chat_demo(response)
+
+# Output from the above code (example)
+'''
+Text: Why don't scientists trust atoms? Because they make up everything!
+Model: gpt-3.5-turbo
+Total Usage: 39
+Input Tokens: 12
+Output Tokens: 27
+Provider: openai
+Finish Reason: stop
+Stop Reason: length
+Stop Sequence: None
+Function Call: None
+Tool Calls: None
+'''
+</code></pre>
+
+        <p>Note: The actual values for 'finish_reason', 'stop_reason', 'stop_sequence', 'function_call', and 'tool_calls' may vary depending on the provider and the specific response. Some providers may not support all these fields, in which case they will be set to None.</p>
+
+        <p>Additional fields in the response dictionary:</p>
+        <ul>
+            <li><code>refusal</code>: Information about content refusal (if applicable)</li>
+            <li><code>function_call</code>: Details of a function call (if supported by the provider)</li>
+            <li><code>tool_calls</code>: Information about tool calls (if supported by the provider)</li>
+            <li><code>logprobs</code>: Log probabilities (if provided by the model)</li>
+        </ul>
+
+        <p>These additional fields provide more detailed information about the model's response and can be useful for advanced use cases or debugging.</p>
+
+        <h3 id="plugin-architecture">Plugin Architecture</h3>
+        <p>The <code>LLMConnector</code> class uses a plugin-based architecture to handle different providers. Each provider has its own template file in the <code>plugins</code> folder containing the required cURL command structure and an output filter to match the standardized dictionary format.</p>
+
+        <h3 id="adding-provider">Adding a New Provider</h3>
+        <p>To add a new provider, create a new template file in the <code>plugins</code> folder with the following structure:</p>
+
+        <h4>Example Template File (plugins/newprovider.py):</h4>
+        <pre><code class="language-python">import requests
+
+def send_request(api_key, user_prompt, system_prompt, model, temperature, max_tokens):
+    url = "https://api.newprovider.com/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    data = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ],
+        "temperature": temperature,
+        "max_tokens": max_tokens
+    }
+    response = requests.post(url, headers=headers, json=data)
+    response.raise_for_status()
+    return response.json()
+
+def format_response(response):
+    return {
+        "provider": "newprovider",
+        "model": response["model"],
+        "text": response["choices"][0]["message"]["content"],
+        "usage": {
+            "input_tokens": response["usage"]["prompt_tokens"],
+            "output_tokens": response["usage"]["completion_tokens"],
+            "total_tokens": response["usage"]["total_tokens"]
+        }
+    }
+</code></pre>
+
+        <h2 id="using-provider">Using the New Provider</h2>
+        <p>Once the new provider template file is created, you can use it by specifying the provider name when initializing the <code>LLMConnector</code>:</p>
+
+        <pre><code class="language-python">from connector import LLMConnector
+
+# Initialize with the new provider
+connector = LLMConnector(provider="newprovider")
+
+# Send a chat prompt
+response = connector.chat(user_prompt="Tell me a joke.")
+print(response)
+</code></pre>
+
+        <h3 id="notes">Notes:</h3>
+        <ul>
+            <li>Ensure that the <code>settings.cfg</code> file is properly configured with the necessary API keys and endpoints for the providers.</li>
+            <li>The <code>provider</code> argument can be <code>"anthropic"</code> or <code>"openai"</code>. If not provided, the default provider from the <code>settings.cfg</code> file will be used.</li>
+            <li>The <code>usage</code> dictionary in the response provides standardized token usage information for both providers.</li>
+        </ul>
+
+        <h2 id="tool-usage">Tool Usage and Creation</h2>
+        <p>The LLMConnector supports the use of tools, which allow the AI to perform specific actions or retrieve information. Here's how to use and create tools:</p>
+
+        <h3>Using Tools</h3>
+        <p>To use tools with the LLMConnector, you need to pass a list of tool names when calling the chat method:</p>
+
+        <pre><code class="language-python">from connector import LLMConnector
+
+# Initialize the connector with a specific provider
+connector = LLMConnector(provider='openai')
+
+# Use the chat method with tools
+response = connector.chat(
+    "What's today's date?",
+    functions=['get_current_date', 'ask_tavily'],
+    system_prompt="You are a helpful assistant. When asked about the current date, use the get_current_date function.",
+    model="gpt-4o-mini"
+)
+print(response['text'])
+</code></pre>
+
+        <p>Note that tools are referred to as 'functions' in the chat method parameters for compatibility with different providers.</p>
+
+        <h3>Creating New Tools</h3>
+        <p>To create a new tool, follow these steps:</p>
+        <ol>
+            <li>Create a new Python file in the <code>/plugins/tools</code> folder.</li>
+            <li>Define the tool's function and its schemas for different providers.</li>
+            <li>Ensure the tool is properly registered with the LLMConnector.</li>
+        </ol>
+
+        <p>Here's an example of a tool file structure using <code>get_current_date.py</code>:</p>
+
+        <pre><code class="language-python"># File: /plugins/tools/get_current_date.py
+from datetime import datetime
+
+def get_current_date(date=None,**kwargs):
+    return str(datetime.now().strftime("%Y-%m-%d"))
+
+function_name = {"function":"get_current_date"}
+
+openai_function_schema = {
+    "type": "function",
+    "function": {
+        "name": "get_current_date",
+        "description": "Get the delivery date for a customer's order. Call this whenever you need to know the delivery date, for example when a customer asks 'Where is my package'",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "date": {
+                    "type": "string",
+                    "description": "The current date"
+                }
+            },
+            "required": [],
+            "additionalProperties": False
+        }
+    }
+}
+
+anthropic_tool_schema = {
+    "type": "function",
+    "function": {
+        "name": "get_current_date",
+        "description": "Get the current date. Use this when you need to know the current date.",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+    }
+}
+</code></pre>
+
+        <p>Note the following important elements:</p>
+        <ul>
+            <li>The main function (<code>get_current_date</code>) implements the tool's functionality.</li>
+            <li><code>function_name</code> is a dictionary containing the function name, it is used to call the tool function.</li>
+            <li><code>openai_function_schema</code> defines the schema for OpenAI-compatible providers.</li>
+            <li><code>anthropic_tool_schema</code> defines the schema for Anthropic-compatible providers.</li>
+        </ul>
+
+        <p>Ensure that the schemas accurately describe the tool's functionality and parameters. The LLMConnector will use these schemas to properly integrate the tool with different LLM providers.</p>
+
+        <p>To use the new tool in your application, simply include its name in the 'functions' list when calling the chat method:</p>
+
+        <pre><code class="language-python">from connector import LLMConnector
+
+connector = LLMConnector(provider='anthropic')
+response = connector.chat(
+    "Get the current date.",
+    model="claude-3-5-sonnet-20240620",
+    functions=['get_current_date', 'ask_tavily']
+)
+print(response['text'])
+</code></pre>
+
+        <p>By following this structure, you can easily create and integrate new tools into your LLMConnector-based application, ensuring compatibility with different LLM providers.</p>
+    </main>
+</body>
+</html>
+</code></pre>
+
+anthropic_tool_schema = {
+    "type": "function",
+    "function": {
+        "name": "get_current_date",
+        "description": "Get the current date. Use this when you need to know the current date.",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+    }
+}
+</code></pre>
+
+        <p>Note the following important elements:</p>
+        <ul>
+            <li>The main function (<code>get_current_date</code>) implements the tool's functionality.</li>
+            <li><code>openai_function_schema</code> defines the schema for OpenAI-compatible providers.</li>
+            <li><code>anthropic_tool_schema</code> defines the schema for Anthropic-compatible providers.</li>
+        </ul>
+
+        <p>Ensure that the schemas accurately describe the tool's functionality and parameters. The LLMConnector will use these schemas to properly integrate the tool with different LLM providers.</p>
+
+        <p>To use the new tool in your application, simply include its name in the 'functions' list when calling the chat method:</p>
+
+        <pre><code class="language-python">from connector import LLMConnector
+
+connector = LLMConnector(provider='anthropic')
+response = connector.chat(
+    "Get the current date.",
+    model="claude-3-5-sonnet-20240620",
+    functions=['get_current_date', 'ask_tavily']
+)
+print(response['text'])
+</code></pre>
+
+        <p>By following this structure, you can easily create and integrate new tools into your LLMConnector-based application, ensuring compatibility with different LLM providers.</p>
+    </main>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.25.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.25.0/components/prism-python.min.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            const sections = document.querySelectorAll("main h2, main h3");
+            const navLinks = document.querySelectorAll("nav a");
+
+            const observerOptions = {
+                root: null,
+                rootMargin: '0px',
+                threshold: 0.5 // Adjust this value as needed
+            };
+
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        navLinks.forEach((link) => link.classList.remove("active"));
+                        const id = entry.target.getAttribute("id");
+                        const activeLink = document.querySelector(`nav a[href="#${id}"]`);
+                        if (activeLink) {
+                            activeLink.classList.add("active");
+                        }
+                    }
+                });
+            }, observerOptions);
+
+            sections.forEach(section => {
+                observer.observe(section);
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ContextManager Documentation</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.25.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+    <style>
+        body {
+            display: flex;
+            background-color: #121212;
+            color: #e0e0e0;
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+        }
+        nav {
+            width: 200px;
+            padding: 20px;
+            background-color: #1e1e1e;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+            left: 0;
+            top: 0;
+        }
+        nav h2 {
+            color: #bb86fc;
+            margin-top: 0;
+        }
+        nav a {
+            color: #bb86fc;
+            text-decoration: none;
+            display: block;
+            margin-bottom: 10px;
+        }
+        nav a:hover, nav a.active {
+            text-decoration: underline;
+            color: #ffffff;
+        }
+        main {
+            margin-left: 240px;
+            padding: 20px;
+            flex-grow: 1;
+        }
+        h1, h2, h3, h4 {
+            color: #bb86fc;
+        }
+        code {
+            background-color: #1e1e1e;
+            color: #dcdcdc;
+            padding: 2px 4px;
+            border-radius: 4px;
+        }
+        pre {
+            background-color: #1e1e1e;
+            color: #dcdcdc;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        ul {
+            padding-left: 20px;
+        }
+    </style>
+</head>
+<body>
+    <nav>
+        <h2>Index</h2>
+        <a href="#initialization">Initialization</a>
+        <a href="#start-new-session">Start New Session</a>
+        <a href="#add-message">Add Message</a>
+        <a href="#send-message">Send Message</a>
+        <a href="#save-load-history">Save and Load History</a>
+        <a href="#profile-management">Profile Management</a>
+        <a href="#memory-management">Memory Management</a>
+        <a href="#subconscious-injection">Subconscious Injection</a>
+        <a href="#utility-methods">Utility Methods</a>
+    </nav>
+    <main>
+        <h1>Usage Instructions for <code>ContextManager</code></h1>
+
+        <h2 id="initialization">Initialization</h2>
+        <p>The <code>ContextManager</code> class manages the context of conversations, including chat history, user profiles, and memory management.</p>
+
+        <h3>Arguments:</h3>
+        <ul>
+            <li><code>llm_connector</code>: An instance of <code>LLMConnector</code> for interacting with the language model.</li>
+            <li><code>max_history_tokens</code> (optional): Maximum number of tokens to keep in chat history. Default is 32768.</li>
+            <li><code>save_interval</code> (optional): Interval in seconds for auto-saving chat history. Default is 120 seconds.</li>
+            <li><code>user_id</code> (optional): Unique identifier for the user. Default is an empty string.</li>
+        </ul>
+
+        <h3>Example:</h3>
+        <pre><code class="language-python">
+from context_manager import ContextManager
+from connector import LLMConnector
+
+llm_connector = LLMConnector(provider='openai')
+context_manager = ContextManager(llm_connector, user_id='user123')
+        </code></pre>
+
+        <h2 id="add-message">Add Message</h2>
+        <p>The <code>add_message</code> method adds a new message to the chat history.</p>
+
+        <h3>Arguments:</h3>
+        <ul>
+            <li><code>role</code>: The role of the message sender (e.g., 'user', 'assistant', 'system').</li>
+            <li><code>content</code>: The content of the message.</li>
+            <li><code>metadata</code> (optional): Additional metadata for the message.</li>
+        </ul>
+
+        <h3>Example:</h3>
+        <pre><code class="language-python">
+context_manager.add_message("user", "Hello, how are you?")
+context_manager.add_message("assistant", "I'm doing well, thank you for asking!")
+        </code></pre>
+
+        <h2 id="send-message">Send Message</h2>
+        <p>The <code>send_message</code> method sends a message to the LLM and processes the response.</p>
+
+        <h3>Arguments:</h3>
+        <ul>
+            <li><code>user_prompt</code>: The user's message to send to the LLM.</li>
+            <li><code>system_prompt</code> (optional): A system prompt to set the context for the LLM.</li>
+            <li>Additional keyword arguments to pass to the LLM connector.</li>
+        </ul>
+
+        <h3>Returns:</h3>
+        <p>A dictionary containing the LLM's response and additional information.</p>
+
+        <h3>Example:</h3>
+        <pre><code class="language-python">
+response = context_manager.send_message(
+    "What's the weather like today?",
+    system_prompt="You are a helpful weather assistant.",
+    model="gpt-4o-mini",
+    temperature=0.7
+)
+print(response['text'])
+        </code></pre>
+
+        <h2 id="save-load-history">Save and Load History</h2>
+        <p>The ContextManager provides methods to save and load chat history.</p>
+
+        <h3>Save History:</h3>
+        <pre><code class="language-python">
+context_manager.save_history()
+        </code></pre>
+
+        <h3>Load History:</h3>
+        <pre><code class="language-python">
+context_manager.load_history('session_id_123')
+        </code></pre>
+
+        <h2 id="profile-management">Profile Management</h2>
+        <p>The ContextManager includes functionality to update and manage user profiles.</p>
+
+        <h3>Update Profile:</h3>
+        <p>The profile is automatically updated when saving history or can be triggered manually:</p>
+        <pre><code class="language-python">
+context_manager.update_profile()
+        </code></pre>
+
+        <h2 id="memory-management">Memory Management</h2>
+        <p>The ContextManager implements various memory management features:</p>
+
+        <h3>Long-Term Memory:</h3>
+        <p>Long-term memory is handled through special tags in the assistant's responses:</p>
+        <ul>
+            <li><code>&lt;access_long_term_memory&gt;</code>: To retrieve information from long-term memory.</li>
+            <li><code>&lt;store_long_term_memory&gt;</code>: To store information in long-term memory.</li>
+        </ul>
+
+        <h3>Consolidation:</h3>
+        <p>The ContextManager automatically consolidates chat history when it exceeds the token limit:</p>
+        <pre><code class="language-python">
+# This method is called internally when needed
+context_manager._consolidate_history()
+        </code></pre>
+
+        <h2 id="start-new-session">Start New Session</h2>
+        <p>The <code>start_new_session</code> method initializes a new chat session.</p>
+
+        <h3>Behavior:</h3>
+        <ul>
+            <li>Generates a new session ID.</li>
+            <li>Clears the chat history.</li>
+            <li>Resets the token count.</li>
+            <li>Updates the last save time.</li>
+            <li>Calls the <code>_on_new_session_start</code> method for additional initialization.</li>
+            <li>Injects the user profile into the subconscious.</li>
+        </ul>
+
+        <h3>Example:</h3>
+        <pre><code class="language-python">
+context_manager.start_new_session()
+    </code></pre>
+
+        <p>Note: This method is automatically called during initialization and when loading a non-existent session.</p>
+
+        <h2 id="subconscious-injection">Subconscious Injection</h2>
+        <p>The <code>subconscious_injection</code> method injects information into the AI's "subconscious" to influence its behavior without explicitly including the information in the chat history.</p>
+
+        <h3>Arguments:</h3>
+        <ul>
+            <li><code>message</code>: The information to be injected into the subconscious.</li>
+        </ul>
+
+        <h3>Behavior:</h3>
+        <ul>
+            <li>Wraps the message in <code>&lt;subconscious&gt;</code> tags.</li>
+            <li>Sends the wrapped message to the LLM using a specific system prompt.</li>
+            <li>Uses minimal tokens and zero temperature for consistent results.</li>
+        </ul>
+
+        <h3>Example:</h3>
+        <pre><code class="language-python">
+context_manager.subconscious_injection("User prefers concise responses.")
+    </code></pre>
+
+        <p>Note: This method is automatically called when starting a new session to inject the user profile.</p>
+
+        <h3>Get Session ID:</h3>
+        <pre><code class="language-python">
+session_id = context_manager.get_session_id()
+        </code></pre>
+
+        <h3>End Session:</h3>
+        <pre><code class="language-python">
+context_manager.end_session()
+        </code></pre>
+
+        <h3>Notes:</h3>
+        <ul>
+            <li>The ContextManager automatically saves chat history at regular intervals (defined by <code>save_interval</code>).</li>
+            <li>User information and useful information are parsed from the assistant's responses using special tags.</li>
+            <li>The ContextManager uses a separate LLM connector for profile updates to ensure uninterrupted main conversation flow.</li>
+        </ul>
+    </main>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.25.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.25.0/components/prism-python.min.js"></script>
+    <script>
+        // Copy the script from LLMConnector.html
+    </script>
+</body>
+</html>
