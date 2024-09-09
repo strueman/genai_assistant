@@ -9,5 +9,5 @@
 
 html-markdown.py
 # Unignore the default folder
-!/users/default/*
+!/users/default
 
