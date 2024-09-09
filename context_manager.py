@@ -330,7 +330,7 @@ class ContextManager:#                      max_tokens = is limit to triger summ
                         existing_profile = json.load(f)
                 else:
                     # Load blank schema
-                    schema_path = "plugins/tools/profile_schema.json"
+                    schema_path = "plugins/users/default/profile_schema.json"
                     with open(schema_path, 'r') as f:
                         existing_profile = json.load(f)
                     
