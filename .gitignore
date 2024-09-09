@@ -1,4 +1,7 @@
 /settings.cfg
+# Visual Studio Code # 
+.vscode/* 
+.history
 # Ignore all __pycache__ directories
 **/__pycache__/
 
@@ -11,3 +14,41 @@ html-markdown.py
 # Unignore the default folder
 !/users/default
 
+*.py[cod]
+*$py.class
+
+# Distribution / packaging 
+.Python build/ 
+develop-eggs/ 
+dist/ 
+downloads/ 
+eggs/ 
+.eggs/ 
+lib/ 
+lib64/ 
+parts/ 
+sdist/ 
+var/ 
+wheels/ 
+*.egg-info/ 
+.installed.cfg 
+*.egg 
+*.manifest 
+*.spec 
+
+# Log files
+pip-log.txt
+pip-delete-this-directory.txt
+*.log
+
+# Unit test / coverage reports 
+htmlcov/ 
+.tox/ 
+.coverage 
+.coverage.* 
+.cache 
+.pytest_cache/ 
+nosetests.xml 
+coverage.xml 
+*.cover 
+.hypothesis/ 
