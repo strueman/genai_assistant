@@ -1,8 +1,9 @@
 /settings.cfg
-
+.DS_Store
 # Ignore all subfolders in the users directory
 /users/*/
-/data_test
-
+__pycache__/
+html-markdown.py
 # Unignore the default folder
 !/users/default/
+
