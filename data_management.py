@@ -7,6 +7,9 @@ import re
 import signal
 from contextlib import contextmanager
 import time
+import concurrent.futures
+from functools import partial
+
 #Print debug messages TO BE REMOVED
 debug = False
 info = True
@@ -59,15 +62,17 @@ def load_and_process_chat_histories(user_id):
                 empty_sessions.append(session_id)
     
     if payload:
-        process_unconsolidated_items(items=payload, user_id=user_id)
+        process_unconsolidated_items(items=payload, user_id=user_id, empty_sessions=empty_sessions)
         if info: print(f"Processed {len(payload)} unconsolidated sessions")
     else:
         if debug: print("No unconsolidated sessions to process")
     
     # Handle empty sessions
     if empty_sessions:
-        update_empty_sessions(user_id, empty_sessions)
-        if info: print(f"Marked {len(empty_sessions)} sessions as empty")
+       # print(f"Empty sessions: {empty_sessions}")
+        if not payload:
+            update_empty_sessions(user_id, empty_sessions)
+            if info: print(f"Marked {len(empty_sessions)} sessions as empty")
 
 def load_session_index(user_id):
     file_path = f"users/{user_id}/session_history/session_index.json"
@@ -84,90 +89,154 @@ def load_session_history(user_id, session_id):
         data = json.load(f)
         return data.get(session_id, [])
 
-def update_session_index(user_id, session_summaries):
+def update_session_index(user_id, session_summaries, empty_sessions=None):
     file_path = f"users/{user_id}/session_history/session_index.json"
     if os.path.exists(file_path):
         with open(file_path, 'r') as f:
             session_index = json.load(f)
     else:
         session_index = {}
-
+    if empty_sessions:
+        for session_id in empty_sessions:
+            session_index[session_id] = {
+                'summary': 'No summary available',
+                'consolidated': True
+            }
+        if info: print(f"Updated session index for {len(empty_sessions)} empty sessions")
     for session_id, summary in session_summaries.items():
-        try:
-            if session_id in session_index:
-                session_index[session_id]['summary'] = summary['summary']
+        if session_id in session_index:
+            if summary != '' or summary != " ":
+                session_index[session_id]['summary'] = summary
                 session_index[session_id]['consolidated'] = True
             else:
-                session_index[session_id] = {
-                    'timestamp': str(int(time.time())),
-                    'summary': summary['summary'],
-                    'consolidated': True
-                }
-        except:
-            pass
+                print(f"Empty summary for session {session_id}")
+        else:
+            session_index[session_id] = {
+                'timestamp': str(int(time.time())),
+                'summary': summary,
+                'consolidated': True
+            }
+
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
     with open(file_path, 'w') as f:
         json.dump(session_index, f, indent=2)
 
     if info: print(f"Updated session index for {len(session_summaries)} sessions")
 
-def format_chat_history(chat_history, session_id=None):
-    formatted_text = ""
-    for item in chat_history:
-        if item['role'] == 'user':
-            formatted_text += f"human says: {item['content']}\n"
-        elif item['role'] == 'assistant':
-            formatted_text += f"chatbot replies: {item['content']}\n"
-    return formatted_text.strip()
+def filter_and_strip(chat_history):
+    filtered = []
+    for message in chat_history:
+        try:
+            if (isinstance(message, dict) and 'content' in message
+                and "<subconscious>" not in message['content']
+                and "<*ACCEPTED*>" not in message['content']):
+                filtered.append({
+                    'role': message.get('role', ''),
+                    'content': message['content']
+                })
+        except Exception as e:
+            print(f"Error processing message in filter_and_strip: {e}")
+    return filtered
 
-def process_unconsolidated_items(items, user_id=None):
+def format_chat_history(chat_history, session_id=None):
+    formatted_messages = []
+    for item in chat_history:
+        try:
+            role = 'human' if item['role'] == 'user' else 'chatbot'
+            verb = 'says' if item['role'] == 'user' else 'replies'
+            formatted_messages.append(f"{role} {verb}: {item['content']}")
+        except Exception as e:
+            print(f"Error formatting message in format_chat_history: {e}")
+    return '\n'.join(formatted_messages)
+
+def process_unconsolidated_items(items, user_id=None, empty_sessions=None):
     global memories
     processed_count = 0
     session_summaries = {}
-    for index, item in enumerate(items):
-        try:
-            with time_limit(30):  # Set a 30-second timeout for LLM processing
-                session_id = item['session_id']
-                if info: print(f"Processing item {index + 1}/{len(items)}: {session_id}")
-                resp = llm_consolidation(data=item['content'], user_id=user_id, session_id=session_id)
-                if resp:
-                    serializable_resp = make_json_serializable(resp)
-                    if isinstance(serializable_resp, list) and serializable_resp:
-                        for memory in serializable_resp:
-                            memory['session_id'] = session_id
-                            if memory.get('metadata') and 'summary' in memory.get('metadata'):
-                                session_summaries[session_id] = memory.get('summary', '')
-                        memories.extend(serializable_resp)
-                        processed_count += len(serializable_resp)
-                        if debug: print(f"Processed item {index + 1}/{len(items)}: Added {len(serializable_resp)} memory/memories")
-                    elif isinstance(serializable_resp, dict):
-                        serializable_resp['session_id'] = session_id
-                        if serializable_resp.get('metadata') and 'summary' in serializable_resp.get('metadata'):
-                            session_summaries[session_id] = serializable_resp.get('summary', '')
-                        memories.append(serializable_resp)
-                        processed_count += 1
-                        if debug: print(f"Processed item {index + 1}/{len(items)}: Added 1 memory")
+
+    # Create a partial function with fixed arguments
+    process_item_partial = partial(process_single_item, user_id=user_id)
+
+    # Use ThreadPoolExecutor for parallel processing
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        future_to_item = {executor.submit(process_item_partial, item): item for item in items}
+        for future in concurrent.futures.as_completed(future_to_item):
+            item = future_to_item[future]
+            try:
+                result = future.result()
+                if result:
+                    memories.extend(result['memories'])
+                    processed_count += len(result['memories'])
+                    if result['summary']:
+                        session_summaries[item['session_id']] = result['summary']
+                        if debug: print(f"Added summary for session {item['session_id']}: {result['summary']}")
                     else:
-                        if debug: print(f"Processed item {index + 1}/{len(items)}: No valid data to save")
+                        session_summaries[item['session_id']] = 'Summary not available'
+                        if debug: print(f"No summary for session {item['session_id']}")
+                    if debug: print(f"Processed item for session {item['session_id']}: Added {len(result['memories'])} memory/memories")
                 else:
-                    if debug: print(f"Processed item {index + 1}/{len(items)}: No valid response")
-        except TimeoutException:
-            print(f"LLM processing timed out for item {index + 1}/{len(items)}")
-        except Exception as e:
-            print(f"Error processing item {index + 1}/{len(items)}. Error: {str(e)}")
-        
-        # Ensure the session is marked as consolidated even if there was an error
-        if session_id not in session_summaries:
-            session_summaries[session_id] = ''
-    
+                    if debug: print(f"Processed item for session {item['session_id']}: No valid response")
+            except Exception as e:
+                print(f"Error processing item for session {item['session_id']}. Error: {str(e)}")
+            
+            # Ensure the session is marked as consolidated even if there was an error
+            if item['session_id'] not in session_summaries:
+                session_summaries[item['session_id']['summary']] = 'Summary not available'
+                if debug: print(f"Marked empty summary for session {item['session_id']}")
+
     if debug: print(f"Total processed memories: {processed_count}")
     save_memories_to_file(memories=memories, user_id=user_id)
     memories.clear()
     
     # Update session index with summaries
-    update_session_index(user_id, session_summaries)
-
+    update_session_index(user_id, session_summaries, empty_sessions)
+    # print(f"Session summaries: {session_summaries}")
+    # print(f"Empty sessions: {empty_sessions}")
     if debug: print(f"Session summaries: {session_summaries}")
+
+def process_single_item(item, user_id):
+    session_id = item['session_id']
+    try:
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future = executor.submit(process_item_with_llm, item, user_id, session_id)
+            result = future.result(timeout=30)  # 30-second timeout
+            if result:
+                print(f"Result for session {session_id}: ok")
+                return result
+            else:
+                print(f"No valid result for session {session_id}")
+    except concurrent.futures.TimeoutError:
+        print(f"LLM processing timed out for session {session_id}")
+    except Exception as e:
+        print(f"Error processing item for session {session_id}. Error: {str(e)}")
+    return None
+
+def process_item_with_llm(item, user_id, session_id):
+    resp = llm_consolidation(data=item['content'], user_id=user_id, session_id=session_id)
+    if resp:
+        serializable_resp = make_json_serializable(resp)
+        if debug: print(f"Serializable response for session {session_id}: {serializable_resp}")
+        if isinstance(serializable_resp, list):
+            memories = []
+            summary = ''
+            for memory in serializable_resp:
+                if isinstance(memory, dict):
+                    memory['session_id'] = session_id
+                    memories.append(memory)
+                    if 'summary' in memory:
+                        summary = memory['summary']
+                        break  # We've found the summary, no need to continue
+            if debug: print(f"Extracted summary for session {session_id}: {summary}")
+            return {'memories': memories, 'summary': summary}
+        elif isinstance(serializable_resp, dict):
+            serializable_resp['session_id'] = session_id
+            summary = serializable_resp.get('summary', '')
+            if debug: print(f"Extracted summary for session {session_id}: {summary}")
+            return {'memories': [serializable_resp], 'summary': summary}
+        else:
+            print(f"Unexpected response type from llm_consolidation: {type(serializable_resp)}")
+            return {'memories': [], 'summary': ''}
+    return {'memories': [], 'summary': ''}
 
 def update_empty_sessions(user_id, empty_sessions):
     session_index = load_session_index(user_id)
@@ -182,15 +251,7 @@ def update_empty_sessions(user_id, empty_sessions):
                 'consolidated': True
             }
     update_session_index(user_id, session_index)
-
-# def ensure_session_structure(session_data):
-#     default_structure = {
-#         'timestamp': str(int(time.time())),
-#         'summary': 'No summary available',
-#         'consolidated': False
-#     }
-#     return {**default_structure, **session_data}
-
+    if info: print(f"Updated session index for {len(empty_sessions)} empty sessions")
 def llm_consolidation(data, user_id, session_id):
     system_prompt = open("prompts/consolidation_prompt.md", "r").read()
     
@@ -275,17 +336,6 @@ def save_memories_to_file(memories=None, user_id=None):
         json.dump(combined_memories, f, indent=2, default=str)
     
     if info: print(f"Saved {len(memories)} new memories. Total memories: {len(combined_memories)}")
-
-def filter_and_strip(chat_history):
-    filtered_history = []
-    for message in chat_history:
-        if isinstance(message, dict) and 'content' in message:
-            if "<subconscious>" not in message['content'] and "<*ACCEPTED*>" not in message['content']:
-                filtered_history.append({
-                    'role': message.get('role', ''),
-                    'content': message['content']
-                })
-    return filtered_history
 
 # Example usage
 if __name__ == "__main__":
