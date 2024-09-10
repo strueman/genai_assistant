@@ -60,7 +60,7 @@ class LLMConnector:
 
         return tools
 
-    def chat(self, user_prompt, system_prompt="You are a helpful assistant. keep responses short and concise.", model=None, temperature=0.7, max_tokens=150, functions=None, response_format=None):
+    def chat(self, user_prompt, system_prompt="You are a helpful assistant. keep responses short and concise.", model=None, temperature=0.7, max_tokens=4096, functions=None, response_format=None):
         model = model or self.model
         try:
             function_schemas = None

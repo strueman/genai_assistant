@@ -9,6 +9,7 @@ import re
 import logging
 from filelock import FileLock, Timeout
 import tiktoken
+from datetime import datetime
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -16,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 class ContextManager:#                      max_tokens = is limit to triger summerising current chat history
     def __init__(self, llm_connector: LLMConnector, max_history_tokens: int = 32768, 
-                 save_interval: int = 120, user_id: str = ''):
+                 save_interval: int = 120, user_id: str = '', session_id = None):
         self.llm_connector = llm_connector
         self.update_profile_llm_connector = LLMConnector(provider='openai')
         self.max_history_tokens = max_history_tokens
@@ -25,12 +26,13 @@ class ContextManager:#                      max_tokens = is limit to triger summ
         self.history_lock = threading.Lock()
         self.save_lock = threading.Lock()
         self.user_id = user_id
+        self.session_id = session_id
         # File paths
         self.main_system_prompt_path = 'prompts/main_chat.md'
         self.user_path = f'users/{self.user_id}/'
         self.user_info_file = f'{self.user_path}user_info_data.json'
         self.useful_info_file = f'{self.user_path}useful_info_data.json'
-        self.history_file = f'{self.user_path}chat_histories.json'
+
         self.profile_system_prompt_path = 'prompts/update_profile.md'
         self.profile_data_file_path = f'{self.user_path}user_info_data.json'
         self.profile_output_file_path = f'{self.user_path}user_profile.json'
@@ -46,17 +48,61 @@ class ContextManager:#                      max_tokens = is limit to triger summ
         self.current_token_count = 0
         self.encoder = tiktoken.encoding_for_model("gpt-4o-mini")  # or whichever model you're using
 
+        self.session_index_file = f'{self.user_path}session_history/session_index.json'
+        self.shutdown_lock = threading.Lock()
+
         self.start_new_session()  # This replaces the direct session_id assignment
 
     def start_new_session(self):
-        self.session_id = str(uuid.uuid4())
-        self.chat_history = []
+        if self.session_id is None: 
+            self.session_id = str(uuid.uuid4())
+            self.chat_history = []
+            os.makedirs(os.path.dirname(self.history_path), exist_ok=True)
+        self.history_path = f'{self.user_path}session_history/'
+        self.history_file = f'{self.history_path}{self.session_id}.json'
+        if self.session_id is not None:
+            self.chat_history = []
+            self.load_history(self.session_id)
+
         self.current_token_count = 0
         self.last_save_time = time.time()
         print(self.session_id)
         # Call any additional functions or perform any actions needed for a new session
-        self.subconscious_injection(message=self.user_profile)
+        try:
+            self.last_session_summary = self.get_latest_summary()["Summary"]
+            self.last_session_date = self.get_latest_summary()["Date"]
+        except Exception as e:
+            self.last_session_summary = "No previous session summary available."
+            self.last_session_date = "No previous session date available."
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        try:    
+            self.subconscious_injection(message=f"Current time: {current_time}\nLast session date: {self.last_session_date}\nLast session summary: {self.last_session_summary}\nProfile of your user: {self.user_profile}")
+        except Exception as e:
+            logger.error(f"Error in subconscious_injection: {str(e)}")
+       # self.subconscious_injection(message=self.user_profile)
+        self._update_session_index()
         
+    def _update_session_index(self):
+        try:
+            with self.save_lock:
+                if os.path.exists(self.session_index_file):
+                    with open(self.session_index_file, 'r') as f:
+                        session_index = json.load(f)
+                else:
+                    session_index = {}
+
+                timestamp = str(int(time.time()))
+                session_index[self.session_id] = {
+                    "timestamp": timestamp,
+                    "summary": "New session started",
+                    "consolidated": False
+                }
+
+                with open(self.session_index_file, 'w') as f:
+                    json.dump(session_index, f, indent=2)
+        except Exception as e:
+            logger.error(f"Error updating session index: {str(e)}")
+
     def add_message(self, role: str, content: str, metadata: Dict[str, Any] = None) -> None:
         if metadata is None:
             metadata = {"consolidated": False}
@@ -285,8 +331,75 @@ class ContextManager:#                      max_tokens = is limit to triger summ
             logger.error(f"Error loading chat history: {str(e)}")
             self.start_new_session()
 
-    def end_session(self) -> None:
-        self.save_history()
+    def _shutdown(self):
+        try:
+            with self.shutdown_lock:
+                logger.info("Initiating shutdown...")
+                self.save_history()
+                self._update_session_summary()
+                self.cleanup()
+                logger.info("Shutdown completed successfully")
+        except Exception as e:
+            logger.error(f"Error during shutdown: {str(e)}")
+        finally:
+            logger.info("Shutdown process finished")
+
+    def cleanup(self):
+        logger.info("Starting cleanup...")
+        # Close any open file handles
+        # if hasattr(self, 'history_file'):
+        #     if isinstance(self.history_file, str):
+        #         logger.warning("history_file is a string, not a file object. Skipping file close.")
+        #     elif hasattr(self.history_file, 'closed'):
+        #         if not self.history_file.closed:
+        #             self.history_file.close()
+        #             logger.info("History file closed")
+        #     else:
+        #         logger.warning("history_file doesn't have 'closed' attribute. Skipping file close.")
+
+        # Cancel any scheduled tasks
+        if hasattr(self, 'save_timer'):
+            self.save_timer.cancel()
+            logger.info("Save timer cancelled")
+
+        # Join any running threads
+        for thread in threading.enumerate():
+            if thread != threading.current_thread() and thread.is_alive():
+                logger.info(f"Attempting to join thread: {thread.name}")
+                thread.join(timeout=5.0)  # Wait up to 5 seconds for each thread
+                if thread.is_alive():
+                    logger.warning(f"Thread {thread.name} did not terminate within timeout")
+
+        # Close any other resources (e.g., database connections)
+        # self.db_connection.close()  # Uncomment if you have a database connection
+
+        logger.info("Cleanup completed")
+
+    # def _update_session_summary(self):
+    #     try:
+    #         summary = self._generate_session_summary()
+    #         with self.save_lock:
+    #             with open(self.session_index_file, 'r') as f:
+    #                 session_index = json.load(f)
+                
+    #             for timestamp, session_data in session_index.items():
+    #                 if session_data["session_id"] == self.session_id:
+    #                     session_data["summary"] = ''
+    #                    # session_data["consolidated"] = False
+    #                     break
+
+    #             with open(self.session_index_file, 'w') as f:
+    #                 json.dump(session_index, f, indent=2)
+    #     except Exception as e:
+    #         logger.error(f"Error updating session summary: {str(e)}")
+
+    def _generate_session_summary(self) -> str:
+        summary_prompt = "Summarize the following conversation in a brief sentence:\n\n"
+        for msg in self.chat_history[-10:]:  # Use last 10 messages for summary
+            summary_prompt += f"{msg['role'].capitalize()}: {msg['content']}\n\n"
+        
+        summary_response = self.llm_connector.chat(summary_prompt, model="gpt-4o-mini", max_tokens=50)
+        return summary_response.get('text', 'Session ended')
 
     def get_session_id(self) -> str:
         return self.session_id
@@ -398,7 +511,7 @@ class ContextManager:#                      max_tokens = is limit to triger summ
 
     def subconscious_injection(self, message: str) -> None:
         try:
-            message = "<subconscious>"+message+"</subconscious>"
+            message = "<subconscious>"+message+" don't add this information the the user profile, just keep it in your mind</subconscious>"
             response = self.send_message(
                     user_prompt=message,
                     model='gpt-4o-mini',
@@ -410,3 +523,29 @@ class ContextManager:#                      max_tokens = is limit to triger summ
                 
         except Exception as e:
             logger.error(f"Error in subconscious_injection: {str(e)}")
+
+    def get_latest_summary(self) -> str:
+        try:
+            with open(self.session_index_file, 'r') as f:
+                session_index = json.load(f)
+            
+            if not session_index:
+                return "No sessions found."
+            
+            latest_timestamp = max(session_index.keys())
+            latest_entry = session_index[latest_timestamp]
+            
+            # Convert Unix timestamp to human-readable date
+            date_time = datetime.fromtimestamp(int(latest_timestamp))
+            formatted_date = date_time.strftime("%Y-%m-%d %H:%M:%S")
+            
+            latest_summary = latest_entry["summary"]
+            
+            return f"Date: {formatted_date}\nSummary: {latest_summary}"
+        except FileNotFoundError:
+            return "No session index file found."
+        except json.JSONDecodeError:
+            return "Error reading session index file."
+        except Exception as e:
+            logger.error(f"Error getting latest summary: {str(e)}")
+            return "Error retrieving latest summary."
