@@ -201,7 +201,7 @@ def process_single_item(item, user_id):
             future = executor.submit(process_item_with_llm, item, user_id, session_id)
             result = future.result(timeout=30)  # 30-second timeout
             if result:
-                print(f"Result for session {session_id}: ok")
+                if info: print(f"Result for session {session_id}: ok")
                 return result
             else:
                 print(f"No valid result for session {session_id}")
