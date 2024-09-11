@@ -413,82 +413,82 @@ class ContextManager:#                      max_tokens = is limit to triger summ
         thread = threading.Thread(target=self._update_profile_thread)
         thread.start()
 
-    def _update_profile_thread(self) -> None:
-        try:
-            with self.profile_data_lock.acquire(timeout=30):
-                # Check if the profile data file is empty or doesn't exist
-                if not os.path.exists(self.profile_data_file_path) or os.path.getsize(self.profile_data_file_path) == 0:
-                    #logger.info("No new data to process. Skipping profile update.")
-                    return
+    # def _update_profile_thread(self) -> None:
+    #     try:
+    #         with self.profile_data_lock.acquire(timeout=30):
+    #             # Check if the profile data file is empty or doesn't exist
+    #             if not os.path.exists(self.profile_data_file_path) or os.path.getsize(self.profile_data_file_path) == 0:
+    #                 #logger.info("No new data to process. Skipping profile update.")
+    #                 return
 
-                # Load the data file
-                with open(self.profile_data_file_path, 'r') as f:
-                    input_data = json.load(f)
+    #             # Load the data file
+    #             with open(self.profile_data_file_path, 'r') as f:
+    #                 input_data = json.load(f)
 
-                # If the input data is empty (e.g., '{}'), return early
-                if not input_data:
-                    #logger.info("Input data is empty. Skipping profile update.")
-                    return
+    #             # If the input data is empty (e.g., '{}'), return early
+    #             if not input_data:
+    #                 #logger.info("Input data is empty. Skipping profile update.")
+    #                 return
 
-                # Load the system prompt
-                with open(self.profile_system_prompt_path, 'r') as f:
-                    system_prompt = f.read().strip()
+    #             # Load the system prompt
+    #             with open(self.profile_system_prompt_path, 'r') as f:
+    #                 system_prompt = f.read().strip()
 
-                # Prepare the input data as a string
-                input_data_str = json.dumps(input_data, indent=2)
+    #             # Prepare the input data as a string
+    #             input_data_str = json.dumps(input_data, indent=2)
                 
-                # Load existing profile or create a new one from schema
-                if os.path.exists(self.profile_output_file_path):
-                    with open(self.profile_output_file_path, 'r') as f:
-                        existing_profile = json.load(f)
-                else:
-                    # Load blank schema
-                    schema_path = "plugins/users/default/profile_schema.json"
-                    with open(schema_path, 'r') as f:
-                        existing_profile = json.load(f)
+    #             # Load existing profile or create a new one from schema
+    #             if os.path.exists(self.profile_output_file_path):
+    #                 with open(self.profile_output_file_path, 'r') as f:
+    #                     existing_profile = json.load(f)
+    #             else:
+    #                 # Load blank schema
+    #                 schema_path = "plugins/users/default/profile_schema.json"
+    #                 with open(schema_path, 'r') as f:
+    #                     existing_profile = json.load(f)
                     
-                    # Insert user_id
-                    existing_profile['user_id'] = self.user_id
+    #                 # Insert user_id
+    #                 existing_profile['user_id'] = self.user_id
 
-                existing_profile_str = json.dumps(existing_profile, indent=2)
+    #             existing_profile_str = json.dumps(existing_profile, indent=2)
 
-                # Prepare the full prompt
-                full_prompt = f"{system_prompt}\n\nInput Data:\nExisting Profile to be updated:{existing_profile_str}\nNew Data to be analyse for update:{input_data_str}\n\nPlease update the profile based on this information."
+    #             # Prepare the full prompt
+    #             full_prompt = f"{system_prompt}\n\nInput Data:\nExisting Profile to be updated:{existing_profile_str}\nNew Data to be analyse for update:{input_data_str}\n\nPlease update the profile based on this information."
 
-                # Call the LLM
-                response = self.update_profile_llm_connector.chat(full_prompt, model="gpt-4o-mini", temperature=0.0, max_tokens=8192, response_format='json')
+    #             # Call the LLM
+    #             response = self.update_profile_llm_connector.chat(full_prompt, model="gpt-4o-mini", temperature=0.0, max_tokens=8192, response_format='json')
 
-                if response is None or 'text' not in response:
-                    raise ValueError("No valid response from LLM connector")
+    #             if response is None or 'text' not in response:
+    #                 raise ValueError("No valid response from LLM connector")
 
-                # Parse the LLM's response
-                response_text = response['text']
-                # Remove markdown code block if present
-                if response_text.startswith("```json\n") and response_text.endswith("\n```"):
-                    response_text = response_text[8:-4]  # Remove ```json\n from start and \n``` from end
+    #             # Parse the LLM's response
+    #             response_text = response['text']
+    #             # Remove markdown code block if present
+    #             if response_text.startswith("```json\n") and response_text.endswith("\n```"):
+    #                 response_text = response_text[8:-4]  # Remove ```json\n from start and \n``` from end
                 
-                try:
-                    updated_profile = json.loads(response_text)
-                except json.JSONDecodeError:
-                    logger.error("Failed to parse LLM response as JSON. Response content:")
-                    logger.error(response_text)
-                    raise ValueError("LLM response is not a valid JSON object")
+    #             try:
+    #                 updated_profile = json.loads(response_text)
+    #             except json.JSONDecodeError:
+    #                 logger.error("Failed to parse LLM response as JSON. Response content:")
+    #                 logger.error(response_text)
+    #                 raise ValueError("LLM response is not a valid JSON object")
 
-                # Update the existing profile with the new information
-                self._deep_update(existing_profile, updated_profile)
+    #             # Update the existing profile with the new information
+    #             self._deep_update(existing_profile, updated_profile)
 
-                # Ensure the directory exists
-                os.makedirs(os.path.dirname(self.profile_output_file_path), exist_ok=True)
+    #             # Ensure the directory exists
+    #             os.makedirs(os.path.dirname(self.profile_output_file_path), exist_ok=True)
 
-                # Save the updated profile
-                with open(self.profile_output_file_path, 'w') as f:
-                    json.dump(existing_profile, f, indent=2)
+    #             # Save the updated profile
+    #             with open(self.profile_output_file_path, 'w') as f:
+    #                 json.dump(existing_profile, f, indent=2)
 
-                #logger.info(f"Profile updated successfully: {self.profile_output_file_path}")
+    #             #logger.info(f"Profile updated successfully: {self.profile_output_file_path}")
 
-                # Clear the input data file after successful update
-                with open(self.profile_data_file_path, 'w') as f:
-                    json.dump({}, f)
+    #             # Clear the input data file after successful update
+    #             with open(self.profile_data_file_path, 'w') as f:
+    #                 json.dump({}, f)
 
         except Timeout:
             logger.error(f"Timeout while trying to acquire lock for {self.profile_data_file_path}")
@@ -501,13 +501,13 @@ class ContextManager:#                      max_tokens = is limit to triger summ
         except Exception as e:
             logger.error(f"Unexpected error updating profile in thread: {str(e)}", exc_info=True)
 
-    def _deep_update(self, d, u):
-        for k, v in u.items():
-            if isinstance(v, dict):
-                d[k] = self._deep_update(d.get(k, {}), v)
-            else:
-                d[k] = v
-        return d
+    # def _deep_update(self, d, u):
+    #     for k, v in u.items():
+    #         if isinstance(v, dict):
+    #             d[k] = self._deep_update(d.get(k, {}), v)
+    #         else:
+    #             d[k] = v
+    #     return d
 
     def subconscious_injection(self, message: str) -> None:
         try:

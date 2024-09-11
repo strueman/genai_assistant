@@ -1,13 +1,13 @@
 {
-  "user_id": "",
+  "user_id": null,
   "basic_details": {
-    "name": "",
+    "name": null,
     "age": null,
-    "location": "",
-    "sex": "",
-    "date_of_birth": "",
-    "email": "",
-    "phone_number": ""
+    "location": null,
+    "sex": null,
+    "date_of_birth": null,
+    "email": null,
+    "phone_number": null
   },
   "interests_and_preferences": {
     "hobbies": [],
@@ -28,21 +28,21 @@
     "personality_traits": [],
     "beliefs": [],
     "values": [],
-    "communication_style": "",
-    "social_skills": "",
-    "emotional_intelligence": ""
+    "communication_style": null,
+    "social_skills": null,
+    "emotional_intelligence": null
   },
   "current_lifestyle": {
-    "occupation": "",
-    "living_situation": "",
-    "daily_routine": "",
+    "occupation": null,
+    "living_situation": null,
+    "daily_routine": null,
     "health_habits": [],
-    "work_life_balance": ""
+    "work_life_balance": null
   },
   "relationships": {
     "family": [],
     "friends": [],
-    "romantic": "",
+    "romantic": null,
     "professional": []
   },
   "current_situations": {
@@ -56,19 +56,19 @@
     "developed_expertise": []
   },
   "philosophy": {
-    "life_motto": "",
+    "life_motto": null,
     "core_principles": [],
-    "worldview": "",
-    "ethical_stance": ""
+    "worldview": null,
+    "ethical_stance": null
   },
-  "user_summary": "",
-  "personality_report": "",
+  "user_summary": null,
+  "personality_report": null,
   "detailed_report": {
-    "background": "",
-    "current_situation": "",
+    "background": null,
+    "current_situation": null,
     "challenges": [],
     "strengths": [],
     "areas_for_improvement": [],
-    "future_aspirations": ""
+    "future_aspirations": null
   }
 }

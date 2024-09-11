@@ -35,22 +35,14 @@ Key Information to Extract:
 
 Format your response as a JSON object with the following structure:
 
-{
-  "user_info": [
-    {
-      "type": "name",
-      "value": "John Doe"
-    },
-    {
-      "type": "occupation",
-      "value": "Software Engineer"
-    },
-    {
-      "type": "interest",
-      "value": "Artificial Intelligence"
-    }
-  ]
-}
+
+Output Format: JSON list of dictionaries
+Schema:
+[{
+    "type": "type of information",
+    "value": "Extracted user information",
+},
+// ... more outputs ...
 
 If you can't find any user information, return an empty array for "user_info".
 
