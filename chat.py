@@ -1,18 +1,11 @@
 # import logging
 from context_manager import ContextManager
+import context_manager as cm
 from connector import LLMConnector
 import json
 import os
-import signal
-import sys
 
-def signal_handler(sig, frame):
-    print('Shutting down...')
-    context_manager._shutdown()
-    sys.exit(0)
 
-signal.signal(signal.SIGINT, signal_handler)
-signal.signal(signal.SIGTERM, signal_handler)
 try:
     provider = 'openai'
     model = 'gpt-4o'#'claude-3-5-sonnet-20240620'#'meta-llama/llama-3.1-70b-instruct'
@@ -33,7 +26,7 @@ try:
 
     def main():
         connector = LLMConnector(provider=provider)  # Remove log_level parameter
-        context_manager = ContextManager(connector, user_id=user_id, session_id=None) # Pass session_id if continuing a session else None
+        context_manager = ContextManager(connector, user_id=user_id, session_id="3d57de24-a4ca-4b97-bf5d-5a25dad04249") # Pass session_id if continuing a session else None
         
         session_id = context_manager.get_session_id()
         print(f"Chat interface initialized. Session ID: {session_id}")
@@ -90,12 +83,11 @@ try:
                     print("Please enter a message.")
         finally:
             print("Ending session and saving chat history...")
-            print("Processing long term memory...")
             context_manager._shutdown()
-            print("Long term memory processed. Goodbye!")
+            return
+
 except Exception as e:
     print(f"Unexpected error: {str(e)}")
-# finally:
-#     context_manager._shutdown()
+    pass
 if __name__ == "__main__":
     main()
