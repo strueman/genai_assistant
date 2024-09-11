@@ -27,30 +27,21 @@ def time_limit(seconds):
     finally:
         signal.alarm(0)
 
-def make_json_serializable(obj):
-    if isinstance(obj, (str, int, float, bool, type(None))):
-        return obj
-    elif isinstance(obj, list):
-        return [make_json_serializable(item) for item in obj]
-    elif isinstance(obj, dict):
-        return {str(key): make_json_serializable(value) for key, value in obj.items()}
-    else:
-        return str(obj)
 
 memories = []
 def load_and_process_chat_histories(user_id):
-    session_index = load_session_index(user_id)
+    session_index = _load_session_index(user_id)
     payload = []
     empty_sessions = []
     
     for session_id, session_info in session_index.items():
         if not session_info['consolidated']:
             try:
-                chat_history = load_session_history(user_id, session_id)
-                filtered_history = filter_and_strip(chat_history)
+                chat_history = _load_session_history(user_id, session_id)
+                filtered_history = _filter_and_strip(chat_history)
                 
                 if filtered_history:
-                    formatted_history = format_chat_history(filtered_history, session_id)
+                    formatted_history = _format_chat_history(filtered_history, session_id)
                     if formatted_history.strip():  # Check if formatted history is not empty
                         payload.append({'content': formatted_history, 'session_id': session_id})
                     else:
@@ -64,31 +55,25 @@ def load_and_process_chat_histories(user_id):
     if payload:
         process_unconsolidated_items(items=payload, user_id=user_id, empty_sessions=empty_sessions)
         if info: print(f"Processed {len(payload)} unconsolidated sessions")
-    else:
-        if debug: print("No unconsolidated sessions to process")
-    
-    # Handle empty sessions
-    if empty_sessions:
-       # print(f"Empty sessions: {empty_sessions}")
-        if not payload:
-            update_empty_sessions(user_id, empty_sessions)
-            if info: print(f"Marked {len(empty_sessions)} sessions as empty")
-
-def load_session_index(user_id):
-    file_path = f"users/{user_id}/session_history/session_index.json"
-    if not os.path.exists(file_path):
-        return {}
-    with open(file_path, 'r') as f:
-        return json.load(f)
-
-def load_session_history(user_id, session_id):
-    file_path = f"users/{user_id}/session_history/{session_id}.json"
-    if not os.path.exists(file_path):
-        return []
-    with open(file_path, 'r') as f:
-        data = json.load(f)
-        return data.get(session_id, [])
-
+    else:  
+        # Handle empty sessions for if theres only empty sessions, otherwise they are handled in process_unconsolidated_items()
+        if empty_sessions:
+            for session_id in empty_sessions:
+                if session_id in session_index:
+                    session_index[session_id]['summary'] = 'No summary available'
+                    session_index[session_id]['consolidated'] = True
+                else:
+                    session_index[session_id] = {
+                        'timestamp': str(int(time.time())),
+                        'summary': 'No summary available',
+                        'consolidated': True
+                    }
+            update_session_index(user_id, session_index)
+            if info: print(f"Updated session index for {len(empty_sessions)} empty sessions")
+        else:
+            if info: print("No sessions to update")
+            return
+            
 def update_session_index(user_id, session_summaries, empty_sessions=None):
     file_path = f"users/{user_id}/session_history/session_index.json"
     if os.path.exists(file_path):
@@ -123,31 +108,9 @@ def update_session_index(user_id, session_summaries, empty_sessions=None):
 
     if info: print(f"Updated session index for {len(session_summaries)} sessions")
 
-def filter_and_strip(chat_history):
-    filtered = []
-    for message in chat_history:
-        try:
-            if (isinstance(message, dict) and 'content' in message
-                and "<subconscious>" not in message['content']
-                and "<*ACCEPTED*>" not in message['content']):
-                filtered.append({
-                    'role': message.get('role', ''),
-                    'content': message['content']
-                })
-        except Exception as e:
-            print(f"Error processing message in filter_and_strip: {e}")
-    return filtered
 
-def format_chat_history(chat_history, session_id=None):
-    formatted_messages = []
-    for item in chat_history:
-        try:
-            role = 'human' if item['role'] == 'user' else 'chatbot'
-            verb = 'says' if item['role'] == 'user' else 'replies'
-            formatted_messages.append(f"{role} {verb}: {item['content']}")
-        except Exception as e:
-            print(f"Error formatting message in format_chat_history: {e}")
-    return '\n'.join(formatted_messages)
+
+
 
 def process_unconsolidated_items(items, user_id=None, empty_sessions=None):
     global memories
@@ -185,16 +148,13 @@ def process_unconsolidated_items(items, user_id=None, empty_sessions=None):
                 if debug: print(f"Marked empty summary for session {item['session_id']}")
 
     if debug: print(f"Total processed memories: {processed_count}")
-    save_memories_to_file(memories=memories, user_id=user_id)
-    memories.clear()
-    
+    _save_memories_to_file(memories=memories, user_id=user_id)
+    memories.clear()   
     # Update session index with summaries
     update_session_index(user_id, session_summaries, empty_sessions)
-    # print(f"Session summaries: {session_summaries}")
-    # print(f"Empty sessions: {empty_sessions}")
     if debug: print(f"Session summaries: {session_summaries}")
 
-def process_single_item(item, user_id):
+def process_single_item(item, user_id): #Used for concurrent llm processing of items
     session_id = item['session_id']
     try:
         with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -214,7 +174,7 @@ def process_single_item(item, user_id):
 def process_item_with_llm(item, user_id, session_id):
     resp = llm_consolidation(data=item['content'], user_id=user_id, session_id=session_id)
     if resp:
-        serializable_resp = make_json_serializable(resp)
+        serializable_resp = _make_json_serializable(resp)
         if debug: print(f"Serializable response for session {session_id}: {serializable_resp}")
         if isinstance(serializable_resp, list):
             memories = []
@@ -238,20 +198,6 @@ def process_item_with_llm(item, user_id, session_id):
             return {'memories': [], 'summary': ''}
     return {'memories': [], 'summary': ''}
 
-def update_empty_sessions(user_id, empty_sessions):
-    session_index = load_session_index(user_id)
-    for session_id in empty_sessions:
-        if session_id in session_index:
-            session_index[session_id]['summary'] = 'No summary available'
-            session_index[session_id]['consolidated'] = True
-        else:
-            session_index[session_id] = {
-                'timestamp': str(int(time.time())),
-                'summary': 'No summary available',
-                'consolidated': True
-            }
-    update_session_index(user_id, session_index)
-    if info: print(f"Updated session index for {len(empty_sessions)} empty sessions")
 def llm_consolidation(data, user_id, session_id):
     system_prompt = open("prompts/consolidation_prompt.md", "r").read()
     
@@ -277,8 +223,7 @@ def llm_consolidation(data, user_id, session_id):
             return processed_data
        
     else:
-        print("No text in LLM response")
-    
+        print("No text in LLM response")  
     return None
 
 def process_llm_response(response):
@@ -295,9 +240,9 @@ def process_llm_response(response):
             data = ast.literal_eval(cleaned_response)
             if debug == True: print("Successfully parsed response as Python literal")
         except (SyntaxError, ValueError):
-            # If both methods fail, attempt to recover the data
-            data = recover_malformed_data(cleaned_response)
-            if debug == True: print(f"Recovered malformed data: {data}")
+
+            data = _recover_malformed_data(data)
+            if debug: print(f"Recovered malformed data: {data}")
     
     # Ensure the result is a list
     if isinstance(data, list):
@@ -310,16 +255,10 @@ def process_llm_response(response):
         print(f"Unexpected data type: {type(data)}")
         return None
 
-def recover_malformed_data(text):
-    # Remove any remaining quotes and split by commas
-    items = text.replace('"', '').replace("'", "").split(',')
-    # Strip whitespace from each item and remove empty items
-    return [item.strip() for item in items if item.strip()]
 
-def save_memories_to_file(memories=None, user_id=None):
+# TO BE REPLACED WITH ADD TO MEM0 DATABASE
+def _save_memories_to_file(memories=None, user_id=None):
     file_path = f'users/{user_id}/memories.json'
-    
-    # Load existing memories if the file exists
     existing_memories = []
     if os.path.exists(file_path):
         with open(file_path, 'r') as f:
@@ -327,15 +266,69 @@ def save_memories_to_file(memories=None, user_id=None):
                 existing_memories = json.load(f)
             except json.JSONDecodeError:
                 print("Error reading existing memories file. Starting with empty memories.")
-
-    # Append new memories to existing ones
     combined_memories = existing_memories + memories
-
-    # Write combined memories back to file
     with open(file_path, 'w') as f:
-        json.dump(combined_memories, f, indent=2, default=str)
-    
+        json.dump(combined_memories, f, indent=2, default=str)  
     if info: print(f"Saved {len(memories)} new memories. Total memories: {len(combined_memories)}")
+
+# Helper functions
+def _make_json_serializable(obj):
+    if isinstance(obj, (str, int, float, bool, type(None))):
+        return obj
+    elif isinstance(obj, list):
+        return [_make_json_serializable(item) for item in obj]
+    elif isinstance(obj, dict):
+        return {str(key): _make_json_serializable(value) for key, value in obj.items()}
+    else:
+        return str(obj)
+    
+def _format_chat_history(chat_history, session_id=None):
+    formatted_messages = []
+    for item in chat_history:
+        try:
+            role = 'human' if item['role'] == 'user' else 'chatbot'
+            verb = 'says' if item['role'] == 'user' else 'replies'
+            formatted_messages.append(f"{role} {verb}: {item['content']}")
+        except Exception as e:
+            print(f"Error formatting message in format_chat_history: {e}")
+    return '\n'.join(formatted_messages)
+
+def _filter_and_strip(chat_history):
+    filtered = []
+    for message in chat_history:
+        try:
+            if (isinstance(message, dict) and 'content' in message
+                and "<subconscious>" not in message['content']
+                and "<*ACCEPTED*>" not in message['content']):
+                filtered.append({
+                    'role': message.get('role', ''),
+                    'content': message['content']
+                })
+        except Exception as e:
+            print(f"Error processing message in filter_and_strip: {e}")
+    return filtered
+
+def _recover_malformed_data(text):
+    # Remove any remaining quotes and split by commas
+    items = text.replace('"', '').replace("'", "").split(',')
+    # Strip whitespace from each item and remove empty items
+    return [item.strip() for item in items if item.strip()]
+    
+def _load_session_index(user_id):
+    file_path = f"users/{user_id}/session_history/session_index.json"
+    if not os.path.exists(file_path):
+        return {}
+    with open(file_path, 'r') as f:
+        return json.load(f)
+    
+def _load_session_history(user_id, session_id):
+    file_path = f"users/{user_id}/session_history/{session_id}.json"
+    if not os.path.exists(file_path):
+        return []
+    with open(file_path, 'r') as f:
+        data = json.load(f)
+        return data.get(session_id, [])
+    
 
 # Example usage
 if __name__ == "__main__":
