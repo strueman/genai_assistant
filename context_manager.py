@@ -354,17 +354,20 @@ class ContextManager:#                      max_tokens = is limit to triger summ
 
     def subconscious_injection(self, message: str) -> None:
         try:
-            #print('inject_subconscious triggered')
             message = "<subconscious>"+message+" don't add this information the the user profile, just keep it in your mind, and use it to improve your response to the user</subconscious>"
-            response = self.send_message(
-                    user_prompt=message,
-                    model='gpt-4o-mini',
-                    functions=None,
-                    system_prompt=self.main_system_prompt,
-                    max_tokens=50,
-                    temperature=0.0,
-                    subcon=True
-                )
+            self.add_message(role='user', content=message)
+            self.add_message(role='assistant', content="I will keep that in mind")
+            #print('inject_subconscious triggered')
+            # message = "<subconscious>"+message+" don't add this information the the user profile, just keep it in your mind, and use it to improve your response to the user</subconscious>"
+            # response = self.send_message(
+            #         user_prompt=message,
+            #         model='gpt-4o-mini',
+            #         functions=None,
+            #         system_prompt=self.main_system_prompt,
+            #         max_tokens=50,
+            #         temperature=0.0,
+            #         subcon=True
+            #     )
                 
         except Exception as e:
             print(f"Error in subconscious_injection: {str(e)}")
@@ -456,7 +459,7 @@ class ContextManager:#                      max_tokens = is limit to triger summ
         try:
             memory = f"<subconscious>{memory}</subconscious>"
             self.add_message(role='user', content=memory)
-            self.add_message(role='assistant', content="<^>")
+            self.add_message(role='assistant', content="Well that tickled my neurons! Ill use that information to improve my response to the user if it is relevant")
             #self.add_message(role='user', content=user_prompt,inject=memory, metadata={"consolidated": False})
             # print('inject added to chat history\n\n')
             # try:
