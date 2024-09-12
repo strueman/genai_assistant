@@ -1,5 +1,6 @@
 {
   "user_id": null,
+  "timezone": {"name": null, "offset": null},
   "basic_details": {
     "name": null,
     "age": null,

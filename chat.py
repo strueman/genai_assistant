@@ -26,7 +26,7 @@ try:
 
     def main():
         connector = LLMConnector(provider=provider)  # Remove log_level parameter
-        context_manager = ContextManager(connector, user_id=user_id, session_id="3d57de24-a4ca-4b97-bf5d-5a25dad04249") # Pass session_id if continuing a session else None
+        context_manager = ContextManager(connector, user_id=user_id, session_id=None) # Pass session_id if continuing a session else None
         
         session_id = context_manager.get_session_id()
         print(f"Chat interface initialized. Session ID: {session_id}")

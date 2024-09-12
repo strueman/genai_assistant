@@ -1,5 +1,6 @@
 #this file will contain the code for the database management, file management, data storage and retrieval
 from connector import LLMConnector
+import concurrent.futures
 import json
 import os
 import ast
@@ -9,12 +10,25 @@ from contextlib import contextmanager
 import time
 import concurrent.futures
 from functools import partial
+import configparser
+# import memory_system
+from memory_system import MemorySystem
+import contextlib
+import io
+
+
+config = configparser.ConfigParser()
+config.read('settings.cfg')
+opeanai_api_key = config['openai']['api_key']
+os.environ['OPENAI_API_KEY'] = opeanai_api_key
+
 
 update_profile_llm_connector = LLMConnector(provider='openai')
 #Print debug messages TO BE REMOVED
 debug = False
-info = True
+info = False
 more_info = False
+use_mem0 = True
 class TimeoutException(Exception):
     pass
 
@@ -83,25 +97,28 @@ def update_session_index(user_id, session_summaries, empty_sessions=None):
             session_index = json.load(f)
     else:
         session_index = {}
+    
     if empty_sessions:
         for session_id in empty_sessions:
             session_index[session_id] = {
-                'summary': 'No summary available',
-                'consolidated': True
+                "timestamp": str(int(time.time())),
+                "summary": "No summary available",
+                "consolidated": True
             }
         if info: print(f"Updated session index for {len(empty_sessions)} empty sessions")
+    
     for session_id, summary in session_summaries.items():
         if session_id in session_index:
-            if summary != '' or summary != " ":
-                session_index[session_id]['summary'] = summary
-                session_index[session_id]['consolidated'] = True
+            if summary != '' and summary != " ":
+                session_index[session_id]["summary"] = summary
+                session_index[session_id]["consolidated"] = True
             else:
                 print(f"Empty summary for session {session_id}")
         else:
             session_index[session_id] = {
-                'timestamp': str(int(time.time())),
-                'summary': summary,
-                'consolidated': True
+                "timestamp": str(int(time.time())),
+                "summary": summary,
+                "consolidated": True
             }
 
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
@@ -153,7 +170,12 @@ def process_unconsolidated_items(items, user_id=None, empty_sessions=None):
                 if debug: print(f"Marked empty summary for session {item['session_id']}")
 
     if debug: print(f"Total processed memories: {processed_count}")
-    _save_memories_to_file(memories=memories, user_id=user_id)
+    if use_mem0:
+        print("Processing memories........")
+        with suppress_stdout():
+            _add_memories_to_db(memories=memories, user_id=user_id)
+    else:
+        _save_memories_to_file(memories=memories, user_id=user_id)
     memories.clear()   
     # Update session index with summaries
     update_session_index(user_id, session_summaries, empty_sessions)
@@ -327,6 +349,60 @@ def _save_memories_to_file(memories=None, user_id=None):
         json.dump(combined_memories, f, indent=2, default=str)  
     if info: print(f"Saved {len(memories)} new memories. Total memories: {len(combined_memories)}")
 
+#USE MEM0 DATABASE
+def _add_memories_to_db(memories=None, user_id=None):
+    memory_system = MemorySystem(user_id=user_id)
+    def process_memory(item):
+        if 'data' in item:
+            data = item['data']
+        else:
+            data = item['summary']
+        
+        metadata = {}
+        if 'metadata' in item and isinstance(item['metadata'], list):
+            for meta in item['metadata']:
+                if isinstance(meta, dict):
+                    metadata.update(meta)
+                else:
+                    metadata['tag'] = meta
+        
+        if 'session_id' in item:
+            metadata['session_id'] = item['session_id']
+        
+        try:
+            result = memory_system.add_memory(memory=data, user_id=user_id, metadata=metadata)
+            return result
+        except Exception as e:
+            try:
+                print(f"Error adding memory: {e}")
+                print("Retrying with default user ID...")
+                result = memory_system.add_memory(memory=data, user_id="1100110010010_qa8", metadata=metadata)
+                return result
+            except Exception as e:
+                print(f'Failed to add memory: {e}')
+                return None
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        results = list(executor.map(process_memory, memories))
+    
+    successful_additions = sum(1 for result in results if result is not None)
+    if info:
+        print(f"Successfully added {successful_additions} out of {len(memories)} memories to the database.")
+
+    return #results
+
+# def _save_memories_to_file(memories=None, user_id=None):
+#     for item in memories:
+#         data = item['data']
+#         metadata = item['metadata']
+#         metadata.append(item['session_id'])
+#         result = m.add_memory(memory=data, user_id=user_id, metadata=metadata)
+#         print(result)
+
+    # if info: print(f"Saved {len(memories)} new memories. Total memories: {len(combined_memories)}")
+
+
+
 def save_user_info_to_file(user_info, user_id):
     file_path = f'users/{user_id}/user_info_data.json'
     existing_user_info = []
@@ -355,6 +431,9 @@ def save_user_info_to_file(user_info, user_id):
 def _is_dict_in_list(d, lst):
     """Check if a dictionary is already in a list of dictionaries."""
     return any(d.items() <= existing_dict.items() for existing_dict in lst)
+
+def suppress_stdout():
+    return contextlib.redirect_stdout(io.StringIO())
 
 def _deep_update(d, u):
     for k, v in u.items():
@@ -464,7 +543,7 @@ def _filter_and_strip(chat_history):
         try:
             if (isinstance(message, dict) and 'content' in message
                 and "<subconscious>" not in message['content']
-                and "<*ACCEPTED*>" not in message['content']):
+                and "<^>" not in message['content']):
                 filtered.append({
                     'role': message.get('role', ''),
                     'content': message['content']

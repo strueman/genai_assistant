@@ -11,8 +11,9 @@ from filelock import FileLock, Timeout
 import tiktoken
 from datetime import datetime
 import data_management
+from memory_system import MemorySystem
 # Set up logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.CRITICAL)
 logger = logging.getLogger(__name__)
 
 class ContextManager:#                      max_tokens = is limit to triger summerising current chat history
@@ -31,8 +32,8 @@ class ContextManager:#                      max_tokens = is limit to triger summ
         self.user_path = f'users/{self.user_id}/'
         self.profile_path = f'{self.user_path}user_profile.json'
         with open(self.profile_path, 'r') as f:
-            self.user_profile = json.loads(f.read())
-        self.user_profile = json.dumps(self.user_profile)
+            self.user_profile_dict = json.loads(f.read())
+        self.user_profile = json.dumps(self.user_profile_dict)
         with open(self.main_system_prompt_path, 'r') as f:
             self.main_system_prompt = f.read()
         self.main_system_prompt = json.dumps(self.main_system_prompt)
@@ -44,6 +45,13 @@ class ContextManager:#                      max_tokens = is limit to triger summ
         self.shutdown_lock = threading.Lock()
 
         self.start_new_session()  # This replaces the direct session_id assignment
+      
+
+    def get_user_timezone(self):
+        offset= self.user_profile_dict["timezone"]["offset"]
+        name = self.user_profile_dict["timezone"]["name"]
+        return f"{name}, ({offset})"
+ 
 
     def start_new_session(self):
         if self.session_id is None: 
@@ -62,7 +70,7 @@ class ContextManager:#                      max_tokens = is limit to triger summ
 
         self.current_token_count = 0
         self.last_save_time = time.time()
-        print(self.history_path)
+        print(self.get_user_timezone())
 
         try:
             recent_summaries = self.get_recent_summaries()
@@ -83,14 +91,15 @@ class ContextManager:#                      max_tokens = is limit to triger summ
 
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         try:    
-            self.subconscious_injection(message=f"""Current time: {current_time}
+            message = f"""Current time: {current_time} User timezone: {self.get_user_timezone()}
             Older session date: {self.older_session_date}
             Older session summary: {self.older_session_summary}
             Previous session date: {self.previous_session_date}
             Previous session summary: {self.previous_session_summary}                                        
-            Latest session date: {self.last_session_date}
+            Latest session date: {self.last_session_date} 
             Latest session summary: {self.last_session_summary}
-            Profile of your user: {self.user_profile}""")
+            Profile of your user: {self.user_profile}"""
+            self.subconscious_injection(message=message)
         except Exception as e:
             logger.error(f"Error in subconscious_injection: {str(e)}")
        # self.subconscious_injection(message=self.user_profile)
@@ -132,25 +141,46 @@ class ContextManager:#                      max_tokens = is limit to triger summ
         except Exception as e:
             logger.error(f"Error updating session index: {str(e)}")
 
-    def add_message(self, role: str, content: str, metadata: Dict[str, Any] = None) -> None:
+    def add_message(self, role: str, content: str, inject=False, metadata: Dict[str, Any] = None) -> None:
         if metadata is None:
             metadata = {"consolidated": False}
         else:
             metadata.setdefault("consolidated", False)
-
-        new_message = {
-            "role": role,
-            "content": content,
-            "metadata": metadata
-        }
+        
+        if inject:
+            try:
+               # print('inject', inject)
+                new_message = ({
+                    "role": 'user',
+                    "content": inject,
+                    "metadata": metadata
+                },
+                {
+                    "role": 'assistant',
+                    "content": '<^>',
+                    "metadata": metadata
+                })
+            except Exception as e:
+                print('Error in inject', e)
+        else:
+            new_message = {
+                "role": role,
+                "content": content,
+                "metadata": metadata
+            }
         
         new_message_tokens = len(self.encoder.encode(content))
         
         if self.current_token_count + new_message_tokens > self.max_history_tokens:
             self._condense_context_length()
         
-        self.chat_history.append(new_message)
-        self.current_token_count += new_message_tokens
+        if isinstance(new_message, tuple):
+            self.chat_history.extend(new_message)
+            self.current_token_count += sum(len(self.encoder.encode(msg['content'])) for msg in new_message)
+        else:
+            self.chat_history.append(new_message)
+            self.current_token_count += new_message_tokens
+        
         self._check_save_history()
 
     def _condense_context_length(self) -> None: # Sumerises part of the chat history to reduce the context length
@@ -178,14 +208,18 @@ class ContextManager:#                      max_tokens = is limit to triger summ
         # Recalculate token count
         self.current_token_count = sum(len(self.encoder.encode(msg['content'])) for msg in self.chat_history)
 
-    def send_message(self, user_prompt: str,system_prompt=None, **kwargs) -> Dict:
+    def send_message(self, user_prompt: str, system_prompt=None, subcon=False, **kwargs) -> Dict:
         try:
+            if subcon == False:
+                memory = self.find_memory(user_id=self.user_id, query=user_prompt)
+                if memory is not None:
+                    self.inject_memory(user_id=self.user_id, memory=memory, user_prompt=user_prompt) 
+                    
             context = self._prepare_context(system_prompt)
             full_prompt = f"{context}\n\nUser: {user_prompt}"
             self.add_message("user", user_prompt)
 
             response = self.llm_connector.chat(full_prompt, **kwargs)
-
             if response is None:
                 return {"error": "No response from LLM connector"}
 
@@ -193,12 +227,11 @@ class ContextManager:#                      max_tokens = is limit to triger summ
             self.add_message("assistant", assistant_message)
             self._handle_function_call(response)
 
-            # Parse and store tagged information
-            #self._parse_and_store_tags(assistant_message)
-
             response['session_id'] = self.session_id
             return response
         except Exception as e:
+            print('Error in send_message', user_prompt)
+            print(f"Error details: {str(e)}")
             return {"error": str(e)}
 
     def _handle_function_call(self, response: Dict) -> None:
@@ -277,11 +310,13 @@ class ContextManager:#                      max_tokens = is limit to triger summ
     def _shutdown(self):
         try:
             with self.shutdown_lock:
-                logger.info("Initiating shutdown...")
+                #logger.info("Initiating shutdown...")
                 self.save_history()
+                print("Memory Consolidation.......")
                 data_management.load_and_process_chat_histories(user_id=self.user_id)
-               # self._update_session_summary()
+                print('Cleaning up........')
                 self.cleanup()
+                print("Shutdown completed successfully")
                 logger.info("Shutdown completed successfully")
         except Exception as e:
             logger.error(f"Error during shutdown: {str(e)}")
@@ -294,7 +329,7 @@ class ContextManager:#                      max_tokens = is limit to triger summ
         if hasattr(self, 'save_timer'):
             self.save_timer.cancel()
             logger.info("Save timer cancelled")
-
+        print("Closing threads........")
         # Join any running threads
         for thread in threading.enumerate():
             if thread != threading.current_thread() and thread.is_alive():
@@ -319,18 +354,20 @@ class ContextManager:#                      max_tokens = is limit to triger summ
 
     def subconscious_injection(self, message: str) -> None:
         try:
-            message = "<subconscious>"+message+" don't add this information the the user profile, just keep it in your mind</subconscious>"
+            #print('inject_subconscious triggered')
+            message = "<subconscious>"+message+" don't add this information the the user profile, just keep it in your mind, and use it to improve your response to the user</subconscious>"
             response = self.send_message(
                     user_prompt=message,
                     model='gpt-4o-mini',
                     functions=None,
                     system_prompt=self.main_system_prompt,
                     max_tokens=50,
-                    temperature=0.0
+                    temperature=0.0,
+                    subcon=True
                 )
                 
         except Exception as e:
-            logger.error(f"Error in subconscious_injection: {str(e)}")
+            print(f"Error in subconscious_injection: {str(e)}")
 
     def get_recent_summaries(self) -> Dict[str, Any]:
         try:
@@ -395,3 +432,40 @@ class ContextManager:#                      max_tokens = is limit to triger summ
                 "previous": None,
                 "older": None
             }
+        
+    def find_memory(self,user_id=None,query=None):
+        memory_system = MemorySystem(user_id=user_id)
+        output = memory_system.search(query=query,user_id=user_id)
+        sorted_results = sorted(output['results'], key=lambda x: x['score'])[:3]
+        payload = []
+        for item in sorted_results:
+            if item['score'] < 1:
+    
+                if item['updated_at']:
+                    timestamp = item['updated_at']
+                else:
+                    timestamp = item['created_at']  
+                memory = f"Memory from {timestamp}, in chat session ID {item['metadata']['session_id']}, The memory is, '{item['memory']}'."
+                payload.append(memory)
+        if len(payload) == 0:
+            return None
+        result = '. '.join(payload)
+        return result
+    
+    def inject_memory(self,user_id=None,memory=None,user_prompt=None):
+        try:
+            memory = f"<subconscious>{memory}</subconscious>"
+            self.add_message(role='user', content=memory)
+            self.add_message(role='assistant', content="<^>")
+            #self.add_message(role='user', content=user_prompt,inject=memory, metadata={"consolidated": False})
+            # print('inject added to chat history\n\n')
+            # try:
+            #     self.send_message(user_prompt=user_prompt, subcon=True)
+            # except Exception as e:
+            #     print('Failed to send user_prompt after injection')
+            #     print(e)
+            #     print('content of user_prompt',user_prompt)
+        except Exception as e:
+            print('Failed to inject memory')
+            print(e)
+            self.send_message(user_prompt=user_prompt, subcon=True)
