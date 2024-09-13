@@ -2,6 +2,7 @@
 /memory_system.py
 /test.py
 /test1.py
+/docs/*.md
 # Visual Studio Code # 
 .vscode/* 
 .history
