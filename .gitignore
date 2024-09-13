@@ -1,5 +1,7 @@
 /settings.cfg
 /memory_system.py
+/test.py
+/test1.py
 # Visual Studio Code # 
 .vscode/* 
 .history
