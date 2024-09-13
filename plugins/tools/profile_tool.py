@@ -1,7 +1,8 @@
 from pathlib import Path
 import json
 import os
-
+def get(name="none"):
+    return "profile_tool"
 # Load the profile schema
 schema_path = 'plugins/tools/profile_schema.json'
 with open(schema_path, 'r') as schema_file:

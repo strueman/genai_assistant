@@ -4,7 +4,8 @@ import os
 import time
 from requests.exceptions import RequestException
 
-def send_request(api_key, messages, model, temperature, max_tokens, function_schemas=None, max_retries=3, initial_delay=2,response_format=None):
+def send_request(api_key, messages, model, temperature, max_tokens, functions=None,function_schemas=None, max_retries=3, initial_delay=2,response_format=None):
+
     if response_format =='json':
         response_format={"type": "json_object"}
     else:
@@ -20,10 +21,12 @@ def send_request(api_key, messages, model, temperature, max_tokens, function_sch
         "messages": messages,
         "temperature": temperature,
         "max_tokens": max_tokens,
-        "response_format": response_format
+        "response_format": response_format,
+
     }
     if function_schemas:
         data["tools"] = function_schemas
+    
 
     for attempt in range(max_retries):
         try:

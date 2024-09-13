@@ -1,7 +1,8 @@
 from tavily import TavilyClient
 from pathlib import Path
 import configparser
-
+def get(name="none"):
+    return "ask_tavily"
 def ask_tavily(query):
     p = str(Path(__file__).parents[2])
     config = configparser.ConfigParser()

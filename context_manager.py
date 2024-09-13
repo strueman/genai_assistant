@@ -3,6 +3,7 @@ import time
 import json
 from typing import List, Dict, Any
 from connector import LLMConnector
+from outsourcing import OutSource
 import uuid
 import os
 import re
@@ -208,8 +209,9 @@ class ContextManager:#                      max_tokens = is limit to triger summ
         # Recalculate token count
         self.current_token_count = sum(len(self.encoder.encode(msg['content'])) for msg in self.chat_history)
 
-    def send_message(self, user_prompt: str, system_prompt=None, subcon=False, **kwargs) -> Dict:
+    def send_message(self, user_prompt: str, system_prompt=None,functions=None, subcon=False, **kwargs) -> Dict:
         try:
+            #  if tool_calls is None and function_call is None:
             if subcon == False:
                 memory = self.find_memory(user_id=self.user_id, query=user_prompt)
                 if memory is not None:
@@ -218,8 +220,7 @@ class ContextManager:#                      max_tokens = is limit to triger summ
             context = self._prepare_context(system_prompt)
             full_prompt = f"{context}\n\nUser: {user_prompt}"
             self.add_message("user", user_prompt)
-
-            response = self.llm_connector.chat(full_prompt, **kwargs)
+            response = self.llm_connector.chat(full_prompt, system_prompt=system_prompt, functions=functions, **kwargs)
             if response is None:
                 return {"error": "No response from LLM connector"}
 
@@ -236,22 +237,38 @@ class ContextManager:#                      max_tokens = is limit to triger summ
 
     def _handle_function_call(self, response: Dict) -> None:
         if not response:
+            print("Error: Empty response in _handle_function_call")
             return
 
         function_call = response.get('function_call')
-        if not function_call:
-            tool_calls = response.get('tool_calls', [])
-            if tool_calls and isinstance(tool_calls, list) and len(tool_calls) > 0:
-                function_call = tool_calls[0]
-        
+
+        tool_calls = response.get('tool_calls', [])
+
+        if not function_call and tool_calls and isinstance(tool_calls, list) and len(tool_calls) > 0:
+            function_call = tool_calls[0]
+
         if function_call:
             function_name = function_call.get('name') or function_call.get('function', {}).get('name')
             function_args = function_call.get('arguments') or function_call.get('function', {}).get('arguments')
+
             if function_name and function_args:
                 self.add_message("function", f"Called {function_name} with args: {function_args}")
+                
+                # Actually call the function here and print its result
+                if function_name == 'reddit_summary':
+                    from plugins.tools.reddit_summary import reddit_summary
+                    try:
+                        result = reddit_summary(**json.loads(function_args))
+                    except Exception as e:
+                        print(f"Error calling {function_name}: {str(e)}")
+        else:
+            print("No function call found in response")
 
-    def _prepare_context(self, system_prompt: str) -> str:
-        context = f"System: {system_prompt}\n\n" if system_prompt else ""
+    def _prepare_context(self, system_prompt=None) -> str:
+        if system_prompt:
+             context = f"System: {system_prompt}\n\n"
+        else:
+            context = ""
         for message in self.chat_history:
             role = message['role'].capitalize()
             content = message['content']
@@ -337,10 +354,6 @@ class ContextManager:#                      max_tokens = is limit to triger summ
                 thread.join(timeout=5.0)  # Wait up to 5 seconds for each thread
                 if thread.is_alive():
                     logger.warning(f"Thread {thread.name} did not terminate within timeout")
-
-        # Close any other resources (e.g., database connections)
-        # self.db_connection.close()  # Uncomment if you have a database connection
-
         logger.info("Cleanup completed")
 
 
@@ -354,21 +367,9 @@ class ContextManager:#                      max_tokens = is limit to triger summ
 
     def subconscious_injection(self, message: str) -> None:
         try:
-            message = "<subconscious>"+message+" don't add this information the the user profile, just keep it in your mind, and use it to improve your response to the user</subconscious>"
+            message = "<subconscious>"+message+" just keep this in your mind, and use it to improve your response to the user</subconscious>"
             self.add_message(role='user', content=message)
-            self.add_message(role='assistant', content="I will keep that in mind")
-            #print('inject_subconscious triggered')
-            # message = "<subconscious>"+message+" don't add this information the the user profile, just keep it in your mind, and use it to improve your response to the user</subconscious>"
-            # response = self.send_message(
-            #         user_prompt=message,
-            #         model='gpt-4o-mini',
-            #         functions=None,
-            #         system_prompt=self.main_system_prompt,
-            #         max_tokens=50,
-            #         temperature=0.0,
-            #         subcon=True
-            #     )
-                
+            self.add_message(role='assistant', content="I will keep that in mind")              
         except Exception as e:
             print(f"Error in subconscious_injection: {str(e)}")
 
@@ -460,15 +461,16 @@ class ContextManager:#                      max_tokens = is limit to triger summ
             memory = f"<subconscious>{memory}</subconscious>"
             self.add_message(role='user', content=memory)
             self.add_message(role='assistant', content="Well that tickled my neurons! Ill use that information to improve my response to the user if it is relevant")
-            #self.add_message(role='user', content=user_prompt,inject=memory, metadata={"consolidated": False})
-            # print('inject added to chat history\n\n')
-            # try:
-            #     self.send_message(user_prompt=user_prompt, subcon=True)
-            # except Exception as e:
-            #     print('Failed to send user_prompt after injection')
-            #     print(e)
-            #     print('content of user_prompt',user_prompt)
         except Exception as e:
             print('Failed to inject memory')
             print(e)
             self.send_message(user_prompt=user_prompt, subcon=True)
+
+    def inject_reddit(self):
+        outsource = OutSource()
+        try:
+            summary = outsource.reddit_summary()
+            self.subconscious_injection(message=summary)
+        except Exception as e:
+            print('Failed to inject reddit summary')
+            print(e)

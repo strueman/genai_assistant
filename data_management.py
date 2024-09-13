@@ -1,4 +1,3 @@
-#this file will contain the code for the database management, file management, data storage and retrieval
 from connector import LLMConnector
 import concurrent.futures
 import json
@@ -11,7 +10,6 @@ import time
 import concurrent.futures
 from functools import partial
 import configparser
-# import memory_system
 from memory_system import MemorySystem
 import contextlib
 import io
@@ -150,10 +148,8 @@ def process_unconsolidated_items(items, user_id=None, empty_sessions=None):
                     processed_count += len(result_consolidation['memories'])
                     if result_consolidation['summary']:
                         session_summaries[item['session_id']] = result_consolidation['summary']
-                        if debug: print(f"Added summary for session {item['session_id']}: {result_consolidation['summary']}")
                     else:
                         session_summaries[item['session_id']] = 'Summary not available'
-                        if debug: print(f"No summary for session {item['session_id']}")
                     if debug: print(f"Processed item for session {item['session_id']}: Added {len(result_consolidation['memories'])} memory/memories")
                 else:
                     if debug: print(f"Processed item for session {item['session_id']}: No valid consolidation result")
@@ -391,18 +387,6 @@ def _add_memories_to_db(memories=None, user_id=None):
 
     return #results
 
-# def _save_memories_to_file(memories=None, user_id=None):
-#     for item in memories:
-#         data = item['data']
-#         metadata = item['metadata']
-#         metadata.append(item['session_id'])
-#         result = m.add_memory(memory=data, user_id=user_id, metadata=metadata)
-#         print(result)
-
-    # if info: print(f"Saved {len(memories)} new memories. Total memories: {len(combined_memories)}")
-
-
-
 def save_user_info_to_file(user_info, user_id):
     file_path = f'users/{user_id}/user_info_data.json'
     existing_user_info = []
@@ -421,10 +405,6 @@ def save_user_info_to_file(user_info, user_id):
                 existing_info['value'] = new_info['value']
         else:
             existing_user_info.append(new_info)
-    
-    # with open(file_path, 'w') as f:
-    #     json.dump(existing_user_info, f, indent=2, default=str)
-    # if info: print(f"Saved user info to {file_path}")
     _update_profile_thread(input_data=existing_user_info, user_id=user_id)
 
 

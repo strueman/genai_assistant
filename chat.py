@@ -8,8 +8,8 @@ import os
 
 try:
     provider = 'openai'
-    model = 'gpt-4o'#'claude-3-5-sonnet-20240620'#'meta-llama/llama-3.1-70b-instruct'
-    functions =['get_current_date']#,'ask_tavily']#None
+    model = 'gpt-4o-mini'#'claude-3-5-sonnet-20240620'#'meta-llama/llama-3.1-70b-instruct'
+    functions =['reddit_summary']#,'ask_tavily']#None
     user_id = "1100110010010_qa8"
     # Load the system prompt from the file
     system_prompt_path = 'prompts/main_chat.md'
@@ -59,7 +59,6 @@ try:
                     continue
                 
                 if user_input:
-                    #print(f"Sending message through ContextManager: {user_input[:50]}...")
                     response = context_manager.send_message(
                         user_input,
                         model=model,
@@ -69,7 +68,6 @@ try:
                         temperature=temperature
                     )
                     
-                    #print("Response received from ContextManager")
                     if isinstance(response, dict):
                         if 'error' in response:
                             print(f"Error: {response['error']}")

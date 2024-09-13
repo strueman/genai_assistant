@@ -1,5 +1,6 @@
 from datetime import datetime
-
+def get(name="none"):
+    return "get_current_date"
 def get_current_date(date=None,**kwargs):
     return str(datetime.now().strftime("%Y-%m-%d"))
 

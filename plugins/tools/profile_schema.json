@@ -1,0 +1,75 @@
+{
+  "user_id": null,
+  "timezone": {"name": null, "offset": null},
+  "basic_details": {
+    "name": null,
+    "age": null,
+    "location": null,
+    "sex": null,
+    "date_of_birth": null,
+    "email": null,
+    "phone_number": null
+  },
+  "interests_and_preferences": {
+    "hobbies": [],
+    "interests": [],
+    "desires": [],
+    "goals": [],
+    "likes": [],
+    "dislikes": [],
+    "preferences": {
+      "music": [],
+      "movies": [],
+      "food": [],
+      "travel": []
+    }
+  },
+  "psychosocial_profile": {
+    "mannerisms": [],
+    "personality_traits": [],
+    "beliefs": [],
+    "values": [],
+    "communication_style": null,
+    "social_skills": null,
+    "emotional_intelligence": null
+  },
+  "current_lifestyle": {
+    "occupation": null,
+    "living_situation": null,
+    "daily_routine": null,
+    "health_habits": [],
+    "work_life_balance": null
+  },
+  "relationships": {
+    "family": [],
+    "friends": [],
+    "romantic": null,
+    "professional": []
+  },
+  "current_situations": {
+    "major_life_events": [],
+    "ongoing_challenges": [],
+    "recent_accomplishments": []
+  },
+  "talents": {
+    "skills": [],
+    "natural_abilities": [],
+    "developed_expertise": []
+  },
+  "philosophy": {
+    "life_motto": null,
+    "core_principles": [],
+    "worldview": null,
+    "ethical_stance": null
+  },
+  "user_summary": null,
+  "personality_report": null,
+  "detailed_report": {
+    "background": null,
+    "current_situation": null,
+    "challenges": [],
+    "strengths": [],
+    "areas_for_improvement": [],
+    "future_aspirations": null
+  }
+}

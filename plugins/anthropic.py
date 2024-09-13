@@ -34,6 +34,9 @@ def send_request(api_key, messages, model, system_prompt, max_tokens, function_s
             response.raise_for_status()
             return response.json()
         except requests.exceptions.HTTPError as e:
+            print(f"Error in Anthropic API call: {e}")
+            print(f'headers: {headers}')
+            print(f'data: {data}')
             error_code = e.response.status_code
             error_message = e.response.json().get('error', {}).get('message', str(e))
             
@@ -63,7 +66,7 @@ def construct_error_message(error_code):
     elif error_code == 529:
         return "The Anthropic API is currently overloaded. Please try again in a few minutes."
     else:
-        return "We are experiancing technical difficulties, please try again in a few minutes."
+        return f"We are experiancing technical difficulties, please try again in a few minutes. Error code: {error_code}"
     
 def format_error_as_response(message):
     return {

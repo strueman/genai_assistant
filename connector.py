@@ -4,7 +4,7 @@ import os
 import json
 
 class LLMConnector:
-    def __init__(self, provider=None):
+    def __init__(self, provider='openai'):
         self.config = configparser.ConfigParser()
         try:
             self.config.read('settings.cfg')
@@ -22,15 +22,18 @@ class LLMConnector:
         for filename in os.listdir(tools_dir):
             if filename.endswith('.py'):
                 module_name = filename[:-3]
+                # print("\n\nmodule_name in connector.py:", module_name,"\n\n")
                 try:
                     module = importlib.import_module(f'plugins.tools.{module_name}')
-                    tool_info = {'function': None, 'schemas': {}}
-
+                    func = module.get('function_name')
+                    tool_info = {'function': func, 'schemas': {}}
+                    # print("TOOL INFO in connector.py:", tool_info)
                     # Get the function name
                     if hasattr(module, 'function_name'):
                         function_name = module.function_name.get('function')
                         if function_name and hasattr(module, function_name):
                             tool_info['function'] = getattr(module, function_name)
+                            # print("load_tools in connector.py LOADED",tool_info)
                         else:
                             raise ValueError(f"Invalid or missing function in {module_name}")
                     else:
@@ -51,16 +54,18 @@ class LLMConnector:
 
                     if tool_info['function'] and tool_info['schemas']:
                         tools[module_name] = tool_info
+                        #print("tool_info in connector.py:", tool_info)
                     else:
                         raise ValueError(f"Incomplete tool definition in {module_name}")
 
                 except Exception as e:
-                    continue
-                   # print(f"Error loading tool {module_name}: {e}")
-
+                  #  continue
+                    print(f"Error loading tool {module_name}: {e}")
+        # print("tools in connector.py:", tools)  
         return tools
 
-    def chat(self, user_prompt, system_prompt="You are a helpful assistant. keep responses short and concise.", model=None, temperature=0.7, max_tokens=4096, functions=None, response_format=None):
+    def chat(self, user_prompt, system_prompt="You are a helpful assistant. keep responses short and concise.", model=None, temperature=0.7, max_tokens=4096,provider=None, functions=None, response_format=None):
+        # print("connector.py chat() functions:", functions)
         model = model or self.model
         try:
             function_schemas = None
@@ -72,7 +77,7 @@ class LLMConnector:
                     ]
                 else:  # openai or other providers
                     function_schemas = [self.tools[f]['schemas']['openai'] for f in functions if f in self.tools]
-
+                    #print("function_schemas in connector.py:", function_schemas)
             if self.provider == "anthropic":
                 messages = [
                     {"role": "user", "content": user_prompt}
@@ -108,13 +113,16 @@ class LLMConnector:
                 messages = [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
-            ]
+                ]
                 while True:
-                    response = self.plugin.send_request(self.api_key, messages, model, temperature, max_tokens, function_schemas, response_format=None)
+                    response = self.plugin.send_request(self.api_key, messages, model, temperature, max_tokens, function_schemas=function_schemas, response_format=None)
                     formatted_response = self.plugin.format_response(response)
 
                     if not formatted_response.get('tool_calls'):
-                        return formatted_response
+                        if formatted_response.get('tool_calls') == None:
+                            if formatted_response.get('function_calls')== None: 
+                                return formatted_response
+ 
                     try:
                         function_name = formatted_response['tool_calls'][0]['function']['name']
                         function_args = json.loads(formatted_response['tool_calls'][0]['function']['arguments'])
