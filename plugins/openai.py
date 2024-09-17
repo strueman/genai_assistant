@@ -4,7 +4,7 @@ import os
 import time
 from requests.exceptions import RequestException
 
-def send_request(api_key, messages, model, temperature, max_tokens, functions=None,function_schemas=None, max_retries=3, initial_delay=2,response_format=None):
+def send_request(api_key, messages, model, temperature, max_tokens, functions=None,function_schemas=None, max_retries=3, initial_delay=2,response_format=None,provider=None,**kwargs):
 
     if response_format =='json':
         response_format={"type": "json_object"}

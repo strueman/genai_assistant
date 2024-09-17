@@ -4,7 +4,7 @@ import os
 import time
 from requests.exceptions import RequestException
 
-def send_request(api_key, messages, model, temperature, max_tokens, function_schemas=None, max_retries=3, initial_delay=1):
+def send_request(api_key, messages, model, temperature, max_tokens, function_schemas=None, max_retries=3, initial_delay=1, **kwargs):
     #print(f"Openrouter plugin send_request called with model: {model}")  # Debug print
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {

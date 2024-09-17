@@ -3,16 +3,15 @@ import time
 import json
 from typing import List, Dict, Any
 from connector import LLMConnector
-from outsourcing import OutSource
 import uuid
 import os
-import re
 import logging
 from filelock import FileLock, Timeout
 import tiktoken
 from datetime import datetime
 import data_management
 from memory_system import MemorySystem
+from plugins.cache_api import APICache
 # Set up logging
 logging.basicConfig(level=logging.CRITICAL)
 logger = logging.getLogger(__name__)
@@ -20,7 +19,10 @@ logger = logging.getLogger(__name__)
 class ContextManager:#                      max_tokens = is limit to triger summerising current chat history
     def __init__(self, llm_connector: LLMConnector, max_history_tokens: int = 32768, 
                  save_interval: int = 120, user_id: str = '', session_id = None):
+        self.livefeed_indices = []
+        self.first_run = True
         self.llm_connector = llm_connector
+        self.cache_time = datetime.now().timestamp()
         self.max_history_tokens = max_history_tokens
         self.save_interval = save_interval
         self.last_save_time = time.time()
@@ -71,9 +73,8 @@ class ContextManager:#                      max_tokens = is limit to triger summ
 
         self.current_token_count = 0
         self.last_save_time = time.time()
-        print(self.get_user_timezone())
 
-        try:
+        try: #Insert initial memory context, user profile and previous session summaries
             recent_summaries = self.get_recent_summaries()
             self.last_session_summary = recent_summaries["latest"]["Summary"]
             self.last_session_date = recent_summaries["latest"]["Date"]
@@ -90,8 +91,9 @@ class ContextManager:#                      max_tokens = is limit to triger summ
             self.older_session_summary = "No older session summary available."
             self.older_session_date = "No older session date available."
 
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        try:    
+        
+        try:
+            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             message = f"""Current time: {current_time} User timezone: {self.get_user_timezone()}
             Older session date: {self.older_session_date}
             Older session summary: {self.older_session_summary}
@@ -99,11 +101,10 @@ class ContextManager:#                      max_tokens = is limit to triger summ
             Previous session summary: {self.previous_session_summary}                                        
             Latest session date: {self.last_session_date} 
             Latest session summary: {self.last_session_summary}
-            Profile of your user: {self.user_profile}"""
-            self.subconscious_injection(message=message)
+            Profile summary of your user: {json.loads(self.user_profile)['user_profile_summary']}"""
+            self.subconscious_injection(message=message, relevance='bypass',reply="I acknowledge the subconscious data injection, I will keep that in mind")
         except Exception as e:
-            logger.error(f"Error in subconscious_injection: {str(e)}")
-       # self.subconscious_injection(message=self.user_profile)
+            print(f"Error in subconscious_injection: {str(e)}")
         self._update_session_index(is_new_session)
         
     def _update_session_index(self, is_new_session: bool):
@@ -150,7 +151,6 @@ class ContextManager:#                      max_tokens = is limit to triger summ
         
         if inject:
             try:
-               # print('inject', inject)
                 new_message = ({
                     "role": 'user',
                     "content": inject,
@@ -182,6 +182,9 @@ class ContextManager:#                      max_tokens = is limit to triger summ
             self.chat_history.append(new_message)
             self.current_token_count += new_message_tokens
         
+        if '<live!feed>' in content and role == 'user':
+            self.livefeed_indices.append(len(self.chat_history) - 1)
+        
         self._check_save_history()
 
     def _condense_context_length(self) -> None: # Sumerises part of the chat history to reduce the context length
@@ -211,6 +214,7 @@ class ContextManager:#                      max_tokens = is limit to triger summ
 
     def send_message(self, user_prompt: str, system_prompt=None,functions=None, subcon=False, **kwargs) -> Dict:
         try:
+            #self.inject_feeds(cache_duration=300)
             #  if tool_calls is None and function_call is None:
             if subcon == False:
                 memory = self.find_memory(user_id=self.user_id, query=user_prompt)
@@ -223,6 +227,9 @@ class ContextManager:#                      max_tokens = is limit to triger summ
             response = self.llm_connector.chat(full_prompt, system_prompt=system_prompt, functions=functions, **kwargs)
             if response is None:
                 return {"error": "No response from LLM connector"}
+            if "<live!feed>" in response.get('text', ''):
+                print("Live feed detected in response")
+                self.inject_feeds(cache_duration=None)
 
             assistant_message = response.get('text', '')
             self.add_message("assistant", assistant_message)
@@ -254,7 +261,6 @@ class ContextManager:#                      max_tokens = is limit to triger summ
             if function_name and function_args:
                 self.add_message("function", f"Called {function_name} with args: {function_args}")
                 
-                # Actually call the function here and print its result
                 if function_name == 'reddit_summary':
                     from plugins.tools.reddit_summary import reddit_summary
                     try:
@@ -262,7 +268,7 @@ class ContextManager:#                      max_tokens = is limit to triger summ
                     except Exception as e:
                         print(f"Error calling {function_name}: {str(e)}")
         else:
-            print("No function call found in response")
+            return
 
     def _prepare_context(self, system_prompt=None) -> str:
         if system_prompt:
@@ -365,78 +371,79 @@ class ContextManager:#                      max_tokens = is limit to triger summ
         if current_time - self.last_save_time >= self.save_interval:
             self.save_history()
 
-    def subconscious_injection(self, message: str) -> None:
+    def relevance_filter(self, injection_data: str, relevance_threshold: float = 0.6, relevance=None, reply=None) -> None:
+        recent_history = self.get_recent_history(num_pairs=5)  # Get last 5 message pairs
+        print('relevance', relevance)
         try:
-            message = "<subconscious>"+message+" just keep this in your mind, and use it to improve your response to the user</subconscious>"
-            self.add_message(role='user', content=message)
-            self.add_message(role='assistant', content="I will keep that in mind")              
+            if not isinstance(injection_data, str):
+                raise ValueError("Injection data is not a string")
+            if reply is None:
+                reply = "I acknowledge the data injection, I will keep that in mind"
+            if not isinstance(reply, str):
+                reply = "Acknowledged subconscious"
+        except:    
+            print('Error relevance_filter @ string check', e)
+            return
+        if relevance == 'bypass':
+            print('relevance is true')
+            try:
+                print("Injection_data Type:",type(injection_data))
+                message=injection_data
+                self.add_message(role='user', content=message)
+                print("reply:", reply)
+                self.add_message(role='assistant', content=reply)
+                return              
+            except Exception as e:
+                print('Error relevance_filter @ relevance bypass', e)
+        # Load the system prompt from the file
+        relevance_prompt_path = 'prompts/relevance.md'
+        with open(relevance_prompt_path, 'r') as f:
+            system_prompt = f.read()
+        
+        llm_input = f"Recent conversation:\n{recent_history}\n\nInjection data:\n{injection_data}"
+        llm_con = LLMConnector(provider="openai")
+        response = llm_con.chat(llm_input, system_prompt=system_prompt, model="gpt-4o-mini", provider="openai", functions=None, response_format='json')
+        print(response['text'])
+        # Parse the JSON response
+        try:
+            result = json.loads(response['text'])
+            relevance_score = float(result['relevance_score'])
+            reasoning = result['chain_of_thought_reasoning']
+        except (json.JSONDecodeError, KeyError, ValueError) as e:
+            print(f"Error parsing LLM response: {e}")
+            return
+        if reply is None:
+            reply = "Acknowledged subconscious"
+        if relevance_score > relevance_threshold:
+            self.add_message(role='user', content=injection_data)
+            self.add_message(role='assistant', content=f"Acknowledged. This information is relevant (score: {relevance_score}). Reasoning: {reasoning}")
+        else:
+            print(f"Information not injected. Relevance score: {relevance_score}. Reasoning: {reasoning}")
+
+    def get_recent_history(self, num_pairs: int) -> str:
+        recent_messages = self.chat_history[-2*num_pairs:]
+        return "\n".join([f"{msg['role']}: {msg['content']}" for msg in recent_messages])
+
+    def subconscious_injection(self, message: str, relevance=None, reply="Acknowledged subconscious") -> None:
+        try:
+            message = "<subconscious>" + message + "</subconscious>"
+            self.relevance_filter(message, relevance=relevance, reply=reply)
         except Exception as e:
             print(f"Error in subconscious_injection: {str(e)}")
 
-    def get_recent_summaries(self) -> Dict[str, Any]:
+    def inject_feeds(self, cache_duration=None):
+        cache = APICache(process_name='rss_feeds')
         try:
-            with open(self.session_index_file, 'r') as f:
-                session_index = json.load(f)
-            
-            if not session_index:
-                return {
-                    "latest": {"Date": "No date available", "Summary": "No sessions found."},
-                    "previous": None,
-                    "older": None
-                }
-            
-            # Sort sessions by timestamp in descending order
-            def get_timestamp(item):
-                session_id, entry = item
-                return int(entry.get('timestamp', 0))
-
-            sorted_sessions = sorted(session_index.items(), key=get_timestamp, reverse=True)
-            
-            summaries = []
-            for session_id, entry in sorted_sessions[:3]:  # Get up to 3 most recent sessions
-                timestamp = entry.get('timestamp', '')
-                summary_data = entry.get('summary', {})
-                
-                if isinstance(summary_data, dict):
-                    summary = summary_data.get('summary', 'No summary available')
-                else:
-                    summary = str(summary_data) if summary_data else 'No summary available'
-                
-                if timestamp:
-                    date_time = datetime.fromtimestamp(int(timestamp))
-                    formatted_date = date_time.strftime("%Y-%m-%d %H:%M:%S")
-                else:
-                    formatted_date = "Date not available"
-                
-                summaries.append({"Date": formatted_date, "Summary": summary})
-            
-            result = {
-                "latest": summaries[0] if summaries else {"Date": "No date available", "Summary": "No sessions found."},
-                "previous": summaries[1] if len(summaries) > 1 else None,
-                "older": summaries[2] if len(summaries) > 2 else None
-            }
-            
-            return result
-        except FileNotFoundError:
-            return {
-                "latest": {"Date": "No date available", "Summary": "No session index file found."},
-                "previous": None,
-                "older": None
-            }
-        except json.JSONDecodeError:
-            return {
-                "latest": {"Date": "No date available", "Summary": "Error reading session index file."},
-                "previous": None,
-                "older": None
-            }
+            feeds = cache.get_cache('news_brief')
+            if feeds is None:
+                print("No 'news_brief' found in cache")
+                return
+            feed = f"<live!feed>{feeds}</live!feed>\n\n"
+            print(f"Injecting new feed")
+            self.subconscious_injection(message=feed, relevance='bypass', reply="I acknowledge the livefeed data injection, I will keep that in mind")
         except Exception as e:
-            logger.error(f"Error getting recent summaries: {str(e)}")
-            return {
-                "latest": {"Date": "No date available", "Summary": "Error retrieving summaries."},
-                "previous": None,
-                "older": None
-            }
-        
+            print('Failed to inject livefeeds:', str(e))
+
     def find_memory(self,user_id=None,query=None):
         memory_system = MemorySystem(user_id=user_id)
         output = memory_system.search(query=query,user_id=user_id)
@@ -449,28 +456,20 @@ class ContextManager:#                      max_tokens = is limit to triger summ
                     timestamp = item['updated_at']
                 else:
                     timestamp = item['created_at']  
-                memory = f"Memory from {timestamp}, in chat session ID {item['metadata']['session_id']}, The memory is, '{item['memory']}'."
+                memory = f"Memory from {timestamp}, in chat session ID {item['metadata']['session_id']}, The memory is, '{item['memory'][:1500]}'."
                 payload.append(memory)
         if len(payload) == 0:
             return None
         result = '. '.join(payload)
         return result
     
-    def inject_memory(self,user_id=None,memory=None,user_prompt=None):
+    def inject_memory(self, user_id=None, memory=None, user_prompt=None):
         try:
-            memory = f"<subconscious>{memory}</subconscious>"
-            self.add_message(role='user', content=memory)
-            self.add_message(role='assistant', content="Well that tickled my neurons! Ill use that information to improve my response to the user if it is relevant")
+            print('\n\nMemory injected: ', memory,"\n\n")
+            memory_message = f"[BACKGROUND INFORMATION START] {memory} [BACKGROUND INFORMATION END]. IMPORTANT: This is not part of the current conversation. It's contextual information to enhance your understanding. Do not respond to this directly or treat it as user input."
+            reply = "I've processed the background information and will use it to inform my responses if relevant."
+            self.subconscious_injection(message=memory_message, reply=reply)
         except Exception as e:
             print('Failed to inject memory')
             print(e)
-            self.send_message(user_prompt=user_prompt, subcon=True)
-
-    def inject_reddit(self):
-        outsource = OutSource()
-        try:
-            summary = outsource.reddit_summary()
-            self.subconscious_injection(message=summary)
-        except Exception as e:
-            print('Failed to inject reddit summary')
-            print(e)
+            self.send_message(user_prompt=user_prompt, system_prompt=self.main_system_prompt, user_id=user_id , subcon=False)

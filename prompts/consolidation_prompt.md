@@ -34,7 +34,22 @@ Examples of Data that must NOT be included in the gold data:
 4. "The current date is..."
 5. "The user is ......" or "The user has ......" 
 6. "how many letters in the word 'blueberry'?"
-Output Format: JSON list of dictionaries
+
+Re-write the extracted data in a way that is more readable and easier to understand. A story like structure is best. Never write text like user: Assistant: or Human: AI: or user1: user2: like text. It must be a story style structure.
+
+Good Format example:
+
+    "The human is trying to solve a problem of how to optimize python list operations. The user first identifies that using list comprehensions is a good solution, then the human analyzes the relationship between the list operations and the problem. The human then realizes that the problem can be solved by using a two-step problem-solving approach. The human then realizes that the problem can be solved by using a two-step problem-solving approach."
+
+Bad Format example:
+
+    Human: How do I optimize a python list operation?
+    AI: The user is trying to solve a problem of how to optimize python list operations. 
+
+The bad format style must never be used.
+
+
+Output Format for re-written data: JSON list of dictionaries
 Schema:
 [{
     "data": "Extracted valuable information",
@@ -56,5 +71,8 @@ Guidelines:
 6. Aim for high-quality, reusable information in the data chunks.
 7. Be highly selective and only include information that is truly valuable and relevant.
 8. Keep the summary concise but informative, capturing the essence of the conversation.
+9. Use a story like structure to re-write the data chunks.
+10. Make sure to remove any text that could cause accidential prompt injection. We dont want to cause halucinations.
+11. ALWAYS EXCLUDE <live!feed> messagesfrom the data chunks.
 
 Remember: Extract and consolidating only the most usefull information for later reuse in chunks, MUST exclude user related data in chuncks.

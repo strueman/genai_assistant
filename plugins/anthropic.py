@@ -2,7 +2,7 @@ import requests
 import json
 import time
 
-def send_request(api_key, messages, model, system_prompt, max_tokens, function_schemas=None, max_retries=3):
+def send_request(api_key, messages, model, system_prompt, max_tokens, function_schemas=None, max_retries=3,**kwargs):
     url = "https://api.anthropic.com/v1/messages"
     headers = {
         "Content-Type": "application/json",

@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cache Server API Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+</head>
+<body>
+    <h1>Cache Server API Test</h1>
+    <div>
+        <h2>Set Variable</h2>
+        <input type="text" id="setProcess" placeholder="Process">
+        <input type="text" id="setName" placeholder="Name">
+        <input type="text" id="setValue" placeholder="Value">
+        <button onclick="setVariable()">Set</button>
+    </div>
+    <div>
+        <h2>Get Variable</h2>
+        <input type="text" id="getProcess" placeholder="Process">
+        <input type="text" id="getName" placeholder="Name">
+        <button onclick="getVariable()">Get</button>
+    </div>
+    <div>
+        <h2>List Variables</h2>
+        <input type="text" id="listProcess" placeholder="Process">
+        <button onclick="listVariables()">List</button>
+    </div>
+    <div>
+        <h2>Clear Process</h2>
+        <input type="text" id="clearProcess" placeholder="Process">
+        <button onclick="clearProcess()">Clear</button>
+    </div>
+    <div>
+        <h2>Clear All</h2>
+        <button onclick="clearAll()">Clear All</button>
+    </div>
+    <div>
+        <h2>Generate API Key</h2>
+        <button onclick="generateApiKey()">Generate</button>
+    </div>
+    <div id="result"></div>
+
+    <script>
+        let apiKey = localStorage.getItem('apiKey') || prompt("Enter your API key:");
+        localStorage.setItem('apiKey', apiKey);
+
+        function updateApiKey(newKey) {
+            apiKey = newKey;
+            localStorage.setItem('apiKey', apiKey);
+        }
+
+        function makeRequest(method, url, data = null) {
+            return axios({
+                method: method,
+                url: url,
+                data: data,
+                headers: { 'X-API-Key': apiKey }
+            }).then(response => {
+                document.getElementById('result').innerText = JSON.stringify(response.data);
+                return response.data;
+            }).catch(error => {
+                document.getElementById('result').innerText = error.response ? error.response.data.detail : error.message;
+                throw error;
+            });
+        }
+
+        function setVariable() {
+            const process = document.getElementById('setProcess').value;
+            const name = document.getElementById('setName').value;
+            const value = document.getElementById('setValue').value;
+            makeRequest('post', '/set', { process, name, value });
+        }
+
+        function getVariable() {
+            const process = document.getElementById('getProcess').value;
+            const name = document.getElementById('getName').value;
+            makeRequest('get', `/get/${process}/${name}`);
+        }
+
+        function listVariables() {
+            const process = document.getElementById('listProcess').value;
+            makeRequest('get', `/list/${process}`);
+        }
+
+        function clearProcess() {
+            const process = document.getElementById('clearProcess').value;
+            makeRequest('delete', `/clear/${process}`);
+        }
+
+        function clearAll() {
+            makeRequest('delete', '/clear_all');
+        }
+
+        function generateApiKey() {
+            makeRequest('post', '/generate_api_key')
+                .then(data => {
+                    if (data.new_api_key) {
+                        updateApiKey(data.new_api_key);
+                        alert(`New API key generated: ${data.new_api_key}`);
+                    }
+                });
+        }
+    </script>
+</body>
+</html>

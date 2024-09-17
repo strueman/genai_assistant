@@ -5,15 +5,16 @@ from connector import LLMConnector
 import json
 import os
 
-
+first_message = True  # Change this to a boolean
+initial_prompt = "Greet the user with something interesting from r/singularity or a news item. Respond with <live!feed> as per system prompt"
 try:
     provider = 'openai'
-    model = 'gpt-4o-mini'#'claude-3-5-sonnet-20240620'#'meta-llama/llama-3.1-70b-instruct'
-    functions =['reddit_summary']#,'ask_tavily']#None
+    model = 'gpt-4o-mini'#'meta-llama/llama-3.1-70b-instruct'#'claude-3-5-sonnet-20240620'#'meta-llama/llama-3.1-70b-instruct'
+    functions =None#['reddit_summary']#,'ask_tavily']#None
     user_id = "1100110010010_qa8"
     # Load the system prompt from the file
     system_prompt_path = 'prompts/main_chat.md'
-    temperature = 0.4
+    temperature = 0.5
     try:
         with open(system_prompt_path, 'r') as file:
             system_prompt = file.read()
@@ -25,6 +26,8 @@ try:
         system_prompt = "You are a helpful assistant."
 
     def main():
+        global first_message  # Declare first_message as global
+
         connector = LLMConnector(provider=provider)  # Remove log_level parameter
         context_manager = ContextManager(connector, user_id=user_id, session_id=None) # Pass session_id if continuing a session else None
         
@@ -32,11 +35,16 @@ try:
         print(f"Chat interface initialized. Session ID: {session_id}")
         print("Type 'exit' to quit, 'load' to see available sessions, or 'load [session_id]' to load a specific session.")
         print(f"Session ID: {session_id}")
+        first_message = True  # Initialize first_message here
+        
         try:
-            while True:
-                
-                user_input = input("You: ").strip()
-                
+            while True:                
+                if first_message:
+                    user_input = initial_prompt.strip()
+                    first_message = False
+                else:    
+                    user_input = input("You: ").strip()
+                                
                 if user_input.lower() == 'exit':
                     print("Exiting chat...")
                     break
@@ -64,21 +72,24 @@ try:
                         model=model,
                         functions=functions,
                         system_prompt=system_prompt,
-                        max_tokens=4096,
+                        max_tokens=2048,
                         temperature=temperature
                     )
-                    
+                                        
                     if isinstance(response, dict):
                         if 'error' in response:
                             print(f"Error: {response['error']}")
                         else:
                             assistant_message = response.get('text', 'No response text')
-                            print(f"Assistant: {assistant_message}")
+                            print(f"\nAssistant: {assistant_message}\n")
                         
                     else:
                         print(f"Unexpected response type: {type(response)}")
                 else:
                     print("Please enter a message.")
+                
+        except Exception as e:
+            print(f"Debug: Exception caught in main loop: {str(e)}")  # Debug print
         finally:
             print("Ending session and saving chat history...")
             context_manager._shutdown()

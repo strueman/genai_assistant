@@ -90,12 +90,15 @@ def load_and_process_chat_histories(user_id):
             
 def update_session_index(user_id, session_summaries, empty_sessions=None):
     file_path = f"users/{user_id}/session_history/session_index.json"
+    
+    # Load existing session index or create a new one
     if os.path.exists(file_path):
         with open(file_path, 'r') as f:
             session_index = json.load(f)
     else:
         session_index = {}
     
+    # Update empty sessions
     if empty_sessions:
         for session_id in empty_sessions:
             session_index[session_id] = {
@@ -105,23 +108,25 @@ def update_session_index(user_id, session_summaries, empty_sessions=None):
             }
         if info: print(f"Updated session index for {len(empty_sessions)} empty sessions")
     
+    # Update sessions with summaries
     for session_id, summary in session_summaries.items():
-        if session_id in session_index:
-            if summary != '' and summary != " ":
-                session_index[session_id]["summary"] = summary
-                session_index[session_id]["consolidated"] = True
-            else:
-                print(f"Empty summary for session {session_id}")
-        else:
+        if summary and summary.strip():  # Check if summary is not empty or just whitespace
             session_index[session_id] = {
-                "timestamp": str(int(time.time())),
+                "timestamp": session_index.get(session_id, {}).get("timestamp", str(int(time.time()))),
                 "summary": summary,
                 "consolidated": True
             }
-
+        else:
+            print(f"Empty summary for session {session_id}")
+    
+    # Ensure the directory exists
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    
+    # Write updated session index to file
     with open(file_path, 'w') as f:
         json.dump(session_index, f, indent=2)
+    #verify the data structure and correct it if needed
+    fix_session_index(user_id)
 
     if info: print(f"Updated session index for {len(session_summaries)} sessions")
 
@@ -437,59 +442,38 @@ def _update_profile_thread(input_data, user_id) -> None:
     try:
         if not input_data:
             return
-
         with open("prompts/update_profile.md", 'r') as f:
             system_prompt = f.read().strip()
-
         input_data_str = json.dumps(input_data, indent=2)
-        
-        # Load existing profile or create a new one from schema
         if os.path.exists(profile_output_file_path):
             with open(profile_output_file_path, 'r') as f:
                 existing_profile = json.load(f)
         else:
-            # Load blank schema
             schema_path = "users/default/profile_schema.json"
             with open(schema_path, 'r') as f:
                 existing_profile = json.load(f)
-            
-            # Insert user_id
             existing_profile['user_id'] = user_id
-
         existing_profile_str = json.dumps(existing_profile, indent=2)
-
         full_prompt = f"{system_prompt}\n\nInput Data:\nExisting Profile to be updated:{existing_profile_str}\nNew Data to be analyse for update:{input_data_str}\n\nPlease update the profile based on this information."
-
-        response = update_profile_llm_connector.chat(full_prompt, model="gpt-4o-mini", temperature=0.0, max_tokens=8192, response_format='json')
-
+        response = update_profile_llm_connector.chat(full_prompt, model="gpt-4o-mini", temperature=0.4, max_tokens=8192, response_format='json',provider='openai')
         if response is None or 'text' not in response:
             raise ValueError("No valid response from LLM connector")
-
         response_text = response['text']
         if response_text.startswith("```json\n") and response_text.endswith("\n```"):
-            response_text = response_text[8:-4]
-        
+            response_text = response_text[8:-4]       
         try:
             updated_profile = json.loads(response_text)
         except json.JSONDecodeError:
             raise ValueError("LLM response is not a valid JSON object")
-
-        # Ensure user_summary and personality_report are dictionaries
-        if existing_profile['user_summary'] is None:
-            existing_profile['user_summary'] = {}
+        # if existing_profile['user_summary'] is None:
+        #     existing_profile['user_summary'] = {}
         if existing_profile['personality_report'] is None:
             existing_profile['personality_report'] = {}
-
-        # Update the existing profile with the new information
         existing_profile = _deep_update(existing_profile, updated_profile)
-
         os.makedirs(os.path.dirname(profile_output_file_path), exist_ok=True)
-
         with open(profile_output_file_path, 'w') as f:
             json.dump(existing_profile, f, indent=2)
-
         if info: print(f"Profile updated successfully: {profile_output_file_path}")
-
     except Exception as e:
         print(f"Error updating profile: {e}")
         import traceback
@@ -552,7 +536,38 @@ def _load_session_history(user_id, session_id):
     with open(file_path, 'r') as f:
         data = json.load(f)
         return data.get(session_id, [])
-    
+
+def fix_nested_dict(data):
+    if isinstance(data, dict):
+        if "summary" in data and isinstance(data["summary"], dict):
+            
+            # Recursively find the deepest summary
+            while isinstance(data["summary"], dict) and "summary" in data["summary"]:
+                data = data["summary"]
+            # Extract the final summary text
+            summary_text = data["summary"]["summary"] if isinstance(data["summary"], dict) else data["summary"]
+            # Reconstruct the correct structure
+            return {
+                "timestamp": data.get("timestamp", ""),
+                "summary": summary_text,
+                "consolidated": data.get("consolidated", False)
+            }
+            
+        else:
+            return {k: fix_nested_dict(v) for k, v in data.items()}
+    return data
+
+def fix_session_index(user_id):
+    file_path = f"users/{user_id}/session_history/session_index.json"
+    with open(file_path, 'r') as f:
+        data = json.load(f)
+    fixed_data = fix_nested_dict(data)
+    with open(file_path, 'w') as f:
+        json.dump(fixed_data, f, indent=2)
+
+    print(f"Verified session index file integrity")
+
+
 
 # Example usage
 if __name__ == "__main__":

@@ -27,7 +27,7 @@ def reddit_summary(date=None, **kwargs):
                 formatted_summary += f"   Score: {post['score']}, Comments: {post['num_comments']}\n"
                 formatted_summary += f"   URL: {post['url']}\n"
                 if post['selftext']:
-                    formatted_summary += f"   Content: {post['selftext'][:100]}...\n"
+                    formatted_summary += f"   Content: {post['selftext']}...\n"
                 formatted_summary += "\n"
             formatted_summary += "\n"
         
@@ -75,5 +75,5 @@ anthropic_tool_schema = {
 
 
 # Example usage
-# if __name__ == "__main__":
-#   #  print(reddit_summary())
+if __name__ == "__main__":
+    print(reddit_summary())

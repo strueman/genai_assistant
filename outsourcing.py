@@ -55,7 +55,7 @@ class OutSource():
             for subreddit in reddit.user.subreddits(limit=10):
                 if subreddit.user_has_favorited:
                     hot_posts = []
-                    for post in subreddit.hot(limit=5):
+                    for post in subreddit.hot(limit=10):
                         hot_posts.append({
                             'title': post.title,
                             'url': post.url,

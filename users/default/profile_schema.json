@@ -62,7 +62,6 @@
     "worldview": null,
     "ethical_stance": null
   },
-  "user_summary": null,
   "personality_report": null,
   "detailed_report": {
     "background": null,
@@ -71,5 +70,6 @@
     "strengths": [],
     "areas_for_improvement": [],
     "future_aspirations": null
-  }
+  },
+  "user_profile_summary": null
 }

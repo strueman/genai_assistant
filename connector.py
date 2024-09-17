@@ -115,7 +115,10 @@ class LLMConnector:
                 {"role": "user", "content": user_prompt}
                 ]
                 while True:
-                    response = self.plugin.send_request(self.api_key, messages, model, temperature, max_tokens, function_schemas=function_schemas, response_format=None)
+                    # if provider == "openai":
+                    response = self.plugin.send_request(self.api_key, messages, model, temperature, max_tokens, function_schemas=function_schemas, response_format=None,provider=provider)
+                    # else:
+                    #     response = self.plugin.send_request(self.api_key, messages, model, temperature, max_tokens, function_schemas=function_schemas, provider=provider)
                     formatted_response = self.plugin.format_response(response)
 
                     if not formatted_response.get('tool_calls'):

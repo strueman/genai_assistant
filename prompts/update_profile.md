@@ -15,8 +15,9 @@ Read the current user profile and use the data provided in the JSON file to buil
 - Adding new information
 - Updating existing information
 - Removing outdated information
+- Updating the "user_profile_summary" with an comprehensive and finely detailedsummary of the current user profile, including all the key information from the profile and any new information. The MUST be done, it should be in a story like structure.
 
-Use new intel to create a more accurate and comprehensive profile of the user. Ensure you update the "user_summary", "personality_report", and "detailed_report" sections.
+Use new intel to create a more accurate and comprehensive profile of the user. Ensure you update the "user_profile_summary", "personality_report", and "detailed_report" sections.
 
 ## Handling Conflicting Information
 - When encountering conflicting information, prioritize the most recent data.
@@ -30,6 +31,7 @@ Use new intel to create a more accurate and comprehensive profile of the user. E
   - References to fictional characters or situations
   - Temporary states or moods vs. long-term traits
 - Do not update the profile based on information from role-playing, fictional scenarios, or temporary states unless explicitly indicated as a real change in the user's life.
+- Make sure to update existing data even with small changes like a change in age or extra information. eg name change from first name to full name.
 
 ## Confidence Levels
 - For each piece of information in the profile, assign a confidence level (low, medium, high).
@@ -37,12 +39,6 @@ Use new intel to create a more accurate and comprehensive profile of the user. E
 - In the detailed report, include notes on any information with low confidence that requires further verification.
 
 ## Report Structures
-
-### User Summary
-- Name, age, gender, location
-- Key personality traits (3-5)
-- Main interests and occupations
-- Notable recent life events
 
 ### Personality Report
 - Core values and beliefs
@@ -63,6 +59,11 @@ Use new intel to create a more accurate and comprehensive profile of the user. E
 - Relationship dynamics
 - Intellectual and emotional capabilities
 - Cultural and social influences
+
+### Mandatory Update: User Profile Summary
+- user_profile_summary
+- A detailed and comprehensive report of the user profile information.
+- include all the information from the profile.
 
 ### Profile Schema
 To be based on the user profile provided below.
